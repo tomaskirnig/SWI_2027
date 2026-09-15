@@ -55,3 +55,21 @@ npm run build
 npm start
 ```
 Server standardně poběží na adrese `http://localhost:3000`.
+
+## CP1 walking skeleton
+
+Tato end-to-end cesta (vytvoření rezervace křečka) bude první plně spustitelnou částí aplikace pro fázi CP1:
+
+1. **`POST /api/reservations`** 
+   - V těle požadavku přijde: `student_id`, `hamster_id` (např. "Ferda"), `start_time` a `end_time`.
+2. **→ validate** 
+   - Kontrola "Common rule": Ověříme v databázi, že Ferda v daný čas nemá jinou potvrzenou rezervaci.
+   - Kontrola "Domain-specific rule": Ověříme, že tento `student_id` nevyčerpal svůj denní limit 30 minut.
+3. **→ persist** 
+   - Zápis nového záznamu o rezervaci (stav `CONFIRMED`) do naší PostgreSQL tabulky `reservations`.
+4. **→ trigger boundary** 
+   - Odeslání asynchronní zprávy do "Notification Service" (např. potvrzovací e-mail studentovi).
+5. **→ return reservation ID** 
+   - Návrat HTTP statusu `201 Created` spolu s vygenerovaným ID rezervace v JSON odpovědi.
+6. **→ automated check** 
+   - Součástí releasu bude automatický integrační test, který tuto end-to-end cestu zavolá, získá ID a přes `GET /api/reservations/{id}` ověří uložení.
