@@ -69,7 +69,7 @@ app.get('/', (req: Request, res: Response) => {
             <h1>Rezervační systém</h1>
             <div class="hamster">🐹</div>
             <p>Vítejte v oficiálním rezervačním systému pro našeho <strong>školního křečka Ferdu</strong>!</p>
-            <p>Aby měl Ferda dostatek odpočinku, prosíme, rezervujte si ho zodpovědně (max. 30 minut denně).</p>
+            <p>Každý student si může stejného křečka rezervovat celkem na maximálně 30 minut denně.</p>
             <a href="#" class="btn" onclick="alert('Zatím ve vývoji! Rezervační API bude brzy napojeno.')">Vytvořit rezervaci</a>
         </div>
     </body>

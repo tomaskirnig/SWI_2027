@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { pool } from './db';
 
 async function runSpike() {
@@ -24,16 +25,25 @@ async function runSpike() {
       VALUES ($1, $2, $3, $4, $5)
       RETURNING id;
     `;
+    const reservation = {
+      user_id: 'student_123',
+      hamster_id: 'hamster_ferda',
+      start_time: new Date('2027-10-01T10:00:00Z'),
+      end_time: new Date('2027-10-01T10:30:00Z'),
+      status: 'CONFIRMED',
+    };
     const insertValues = [
-      'student_123', 
-      'hamster_ferda', 
-      new Date('2027-10-01T10:00:00Z'), 
-      new Date('2027-10-01T10:30:00Z'), 
-      'CONFIRMED'
+      reservation.user_id,
+      reservation.hamster_id,
+      reservation.start_time,
+      reservation.end_time,
+      reservation.status,
     ];
     
     const insertResult = await pool.query(insertQuery, insertValues);
+    assert.equal(insertResult.rows.length, 1, 'INSERT musí vrátit právě jedno ID.');
     const newReservationId = insertResult.rows[0].id;
+    assert.ok(Number.isInteger(newReservationId), 'Databáze musí vrátit celočíselné ID rezervace.');
     console.log(`✅ Rezervace uložena s ID: ${newReservationId}`);
 
     // 3. Načtení uložené rezervace
@@ -46,18 +56,21 @@ async function runSpike() {
     console.log('4. Data načtená z databáze:');
     console.log(loadedReservation);
     
-    if (loadedReservation.user_id === 'student_123' && loadedReservation.hamster_id === 'hamster_ferda') {
-      console.log('✅ Spike úspěšný: Načtená data odpovídají uloženým datům!');
-    } else {
-      console.error('❌ Data neodpovídají!');
-    }
+    assert.equal(selectResult.rows.length, 1, 'SELECT musí vrátit právě jednu rezervaci.');
+    assert.deepStrictEqual(
+      loadedReservation,
+      { id: newReservationId, ...reservation },
+      'Načtené ID, uživatel, křeček, časy a stav musí odpovídat uložené rezervaci.',
+    );
+    console.log('✅ Spike úspěšný: Načtená data odpovídají uloženým datům!');
 
-  } catch (error) {
-    console.error('❌ Chyba během běhu spike testu:', error);
   } finally {
     // Ukončení spojení
     await pool.end();
   }
 }
 
-runSpike();
+runSpike().catch((error) => {
+  console.error('❌ Chyba během běhu spike testu:', error);
+  process.exitCode = 1;
+});
