@@ -1,6 +1,18 @@
-# SWI_2027: Rezervační systém pro školního křečka 🐹
+# Křečkomat: Rezervační systém pro školního křečka 🐹
 
 Tento projekt je vyvíjen v Node.js, Express, TypeScript a využívá PostgreSQL pro ukládání dat.
+
+## Tým
+
+Název týmu: **Křečkomat**
+
+Členové:
+
+- Martin Kalus
+- Tomáš Kirnig
+- Petr Gála
+
+Společný repozitář: [tomaskirnig/SWI_2027](https://github.com/tomaskirnig/SWI_2027).
 
 ## Struktura repozitáře
 
@@ -27,15 +39,19 @@ Pro spuštění projektu potřebujete mít nainstalováno:
    ```
 
 3. **Nastavení prostředí:**
-   V kořenovém adresáři se nachází soubor `.env`. Zkontrolujte jej a případně upravte přístupové údaje tak, aby odpovídaly vašemu lokálnímu nastavení PostgreSQL. Výchozí nastavení je:
-   ```env
-   PORT=3000
-   DB_HOST=localhost
-   DB_PORT=5432
-   DB_USER=postgres
-   DB_PASSWORD=postgres
-   DB_NAME=hamster_reservations
+   Po naklonování vytvořte v kořeni projektu soubor `.env` jako kopii `.env.example`. Pokud už vlastní `.env` máte, ponechte jej.
+
+   PowerShell:
+   ```powershell
+   if (-not (Test-Path .env)) { Copy-Item .env.example .env }
    ```
+
+   Linux / macOS:
+   ```bash
+   test -e .env || cp .env.example .env
+   ```
+
+   V `.env` nastavte `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` a `DB_NAME` podle své PostgreSQL. Hodnotu `DB_PASSWORD` nahraďte skutečným heslem databázového uživatele. `PORT` určuje port aplikace (výchozí `3000`). Soubor `.env` je ignorovaný Gitem; sdílená šablona `.env.example` obsahuje pouze ukázkové hodnoty.
 
 4. **Příprava databáze:**
    Ujistěte se, že vaše PostgreSQL databáze běží a vytvořte v ní databázi s názvem `hamster_reservations` (nebo jiným, pokud jste jej změnili v `.env`).
@@ -64,12 +80,12 @@ Tato end-to-end cesta (vytvoření rezervace křečka) bude první plně spustit
    - V těle požadavku přijde: `student_id`, `hamster_id` (např. "Ferda"), `start_time` a `end_time`.
 2. **→ validate** 
    - Kontrola "Common rule": Ověříme v databázi, že Ferda v daný čas nemá jinou potvrzenou rezervaci.
-   - Kontrola "Domain-specific rule": Ověříme, že tento `student_id` nevyčerpal svůj denní limit 30 minut.
+   - Kontrola "Domain-specific rule": Ověříme, že požadovaný interval spolu s potvrzenými rezervacemi stejné dvojice `student_id` a `hamster_id` nepřekročí 30 minut v žádném kalendářním dni (`Europe/Prague`); přesná pravidla jsou v [Project Frame](docs/intent-and-change.md#domain-specific-business-rule).
 3. **→ persist** 
-   - Zápis nového záznamu o rezervaci (stav `CONFIRMED`) do naší PostgreSQL tabulky `reservations`.
-4. **→ trigger boundary** 
-   - Odeslání asynchronní zprávy do "Notification Service" (např. potvrzovací e-mail studentovi).
-5. **→ return reservation ID** 
+   - Zápis nového záznamu o rezervaci ve stavu `DRAFT` do PostgreSQL tabulky `reservations`.
+4. **→ return reservation ID**
    - Návrat HTTP statusu `201 Created` spolu s vygenerovaným ID rezervace v JSON odpovědi.
-6. **→ automated check** 
-   - Součástí releasu bude automatický integrační test, který tuto end-to-end cestu zavolá, získá ID a přes `GET /api/reservations/{id}` ověří uložení.
+5. **→ automated check**
+   - Automatický integrační test zavolá tuto cestu, získá ID a přes `GET /api/reservations/{id}` ověří uložená data a stav `DRAFT`.
+
+Vytvoření návrhu ještě neblokuje čas křečka. Potvrzení bude samostatná operace, která znovu ověří dostupnost a denní limit a teprve potom změní stav na `CONFIRMED` a odešle oznámení přes Notification Service. Tato operace není součástí minimální cesty CP1 popsané výše.

@@ -49,7 +49,7 @@ O křečkovi ukládáme:
 
 DRAFT → CONFIRMED
 
-Rezervace je nejprve vytvořena ve stavu DRAFT. Po úspěšné kontrole dostupnosti a splnění pravidel může být potvrzena a přejde do stavu CONFIRMED.
+Rezervace je nejprve vytvořena ve stavu DRAFT, který ještě neblokuje čas křečka. Samostatná operace potvrzení znovu ověří dostupnost a denní limit. Při splnění pravidel rezervace přejde do stavu CONFIRMED a systém odešle oznámení; při nesplnění zůstane ve stavu DRAFT. Kontrola pravidel a potvrzení musí zabránit kolizi i při souběžných požadavcích.
 
 Další možné přechody:
 
@@ -62,7 +62,7 @@ Dvě potvrzené rezervace stejného křečka se nesmí časově překrývat.
 
 ## Domain-specific business rule
 
-Jeden student může mít jednoho křečka rezervovaného maximálně 30 minut denně.
+Pro každou dvojici student–křeček smí součet potvrzených rezervací (`CONFIRMED`) činit nejvýše 30 minut za kalendářní den v časovém pásmu `Europe/Prague`. Při potvrzení se započítává i potvrzovaná rezervace; stavy `DRAFT` a `CANCELLED` limit nečerpají. U rezervace přes půlnoc se do každého dne započítá jen část, která do něj spadá.
 
 ## External / system boundary
 
@@ -72,7 +72,7 @@ Po potvrzení nebo zrušení rezervace systém odešle uživateli oznámení.
 
 ## Assumption
 
-Předpokládáme, že každý křeček může být v jeden okamžik rezervován pouze jedním studentem.
+Předpokládáme, že každý student má školní e-mailovou adresu, na kterou lze doručovat oznámení o rezervacích. Dostupnost těchto adres je potřeba ověřit před napojením Notification Service.
 
 ## Unknown
 

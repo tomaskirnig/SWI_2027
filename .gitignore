@@ -42,6 +42,9 @@ build/Release
 node_modules/
 jspm_packages/
 
+# Local development tools and database data
+/.local/
+
 # TypeScript v1 declaration files
 typings/
 
