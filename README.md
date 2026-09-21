@@ -11,6 +11,7 @@ Název týmu: **Křečkomat**
 - Martin Kalus
 - Tomáš Kirnig
 - Petr Gála
+- Dennis Carnevale
 
 Společný repozitář: [tomaskirnig/SWI_2027](https://github.com/tomaskirnig/SWI_2027).
 
