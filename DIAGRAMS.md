@@ -63,27 +63,27 @@ Zachycuje celý životní cyklus rezervace v Baseline v0.1, přípustné stavy (
 
 - **Vazba na pravidla:**
   - `BR-01`: Sémantika intervalů a časů.
-  - `BR-02`: Invariant neexistence překryvu rezervací `CONFIRMED` stejného křečka.
-  - `BR-03`: Politika rušení (`currentTime < start`, idempotentní úspěch pro `CANCELLED`).
+  - `BR-02`: Jeden křeček nemůže mít dvě potvrzené rezervace ve stejný čas.
+  - `BR-03`: Politika rušení a termínů (potvrzení i storno nejpozději 15 minut před začátkem rezervace: `currentTime <= start - 15 min`, idempotentní úspěch pro `CANCELLED`).
   - `BR-04`: Denní limit 30 minut student–křeček.
-  - `BR-05`: Význam stavů (pouze `CONFIRMED` alokuje křečka a čerpá denní limit).
-- **Chování DRAFTu při expiraci času:**
-  - Pokud student potvrdí návrh včas (`currentTime < start`), přejde do `CONFIRMED`.
-  - Pokud uplyne termín začátku (`currentTime >= start`) a student se pokusí potvrdit, klientské rozhraní nabídne posun času o prodlevu. Pokud návrh není potvrzen, končí bez alokace prostředků.
+  - `BR-05`: Dopad stavů na křečka a limit (pouze `CONFIRMED` křečka reálně blokuje a počítá se do 30min limitu; `DRAFT` ani `CANCELLED` křečka neobsazují). 
+- **Chování DRAFTu při expiraci času (pravidlo 15 minut předem):**
+  - Pokud student potvrdí návrh včas (`currentTime <= start - 15 min`), přejde do `CONFIRMED`.
+  - Pokud zbývá méně než 15 minut do začátku (`currentTime > start - 15 min`) a student se pokusí potvrdit, klientské rozhraní nabídne posun času o prodlevu. Pokud návrh není potvrzen v novém platném termínu, expiruje bez alokace prostředků.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> DRAFT : OP-01 Create Reservation\n[křeček aktivní, budoucí interval, předběžná nekolize a limit]
+    [*] --> DRAFT : OP-01 Create Reservation [křeček aktivní, začátek >= 15 min v budoucnu, nekolize a limit]
 
     note right of DRAFT
         Návrh neblokuje křečka ani limit.
-        Při pokusu o potvrzení po začátku UI nabídne
-        posunout časy o prodlevu; nepotvrzený
-        návrh po termínu expiruje bez alokace.
+        Při pokusu o potvrzení méně než 15 min
+        před začátkem UI nabídne posunout časy
+        o prodlevu; nepotvrzený návrh expiruje.
     end note
 
-    DRAFT --> CONFIRMED : OP-03 Confirm Reservation\n[currentTime < start, aktivní křeček, žádný překryv, limit <= 30 min]
-    DRAFT --> CANCELLED : OP-04 Cancel Reservation\n[storno před začátkem]
+    DRAFT --> CONFIRMED : OP-03 Confirm Reservation [currentTime <= start - 15 min, aktivní křeček, žádný překryv, limit <= 30 min]
+    DRAFT --> CANCELLED : OP-04 Cancel Reservation [storno nejpozději 15 min před začátkem]
     DRAFT --> [*] : Uplynutí termínu bez potvrzení / opuštění návrhu
 
     note right of CONFIRMED
@@ -92,7 +92,7 @@ stateDiagram-v2
         a čerpá denní limit 30 min.
     end note
 
-    CONFIRMED --> CANCELLED : OP-04 Cancel Reservation\n[storno před začátkem rezervace: currentTime < start]
+    CONFIRMED --> CANCELLED : OP-04 Cancel Reservation [storno nejpozději 15 min před začátkem: currentTime <= start - 15 min]
     CONFIRMED --> [*] : Uplynutí termínu rezervace (proběhla)
 
     note right of CANCELLED
@@ -108,7 +108,7 @@ stateDiagram-v2
 
 ## 1.3 Diagram aktivit — OP-03: Potvrzení rezervace (bod 9c)
 
-Modeluje procesní tok a rozhodovací logiku operace **Potvrzení rezervace** pomocí **plaveckých drah (Swimlanes)**. Znázorňuje rozdělení odpovědnosti mezi klienta, validační vrstvu, atomickou databázovou transakci (ochrana proti souběhu `REQ-07`) a externí notifikační službu.
+Modeluje procesní tok a rozhodovací logiku operace **Potvrzení rezervace**. Znázorňuje rozdělení odpovědnosti mezi klienta, validační vrstvu, atomickou databázovou transakci (ochrana proti souběhu `REQ-07`) a externí notifikační službu.
 
 - **Barevné rozlišení:**
   - 🟢 **Zelená:** Úspěšné dokončení operace.
@@ -133,8 +133,8 @@ flowchart TD
     subgraph ApiLane["⚙️ Křečkomat API (Validace)"]
         CheckAuth{"Existuje rezervace a<br/>patří studentovi?"}:::decision
         CheckState{"Je stav rezervace<br/>DRAFT?"}:::decision
-        CheckTime{"Platí<br/>currentTime < start?"}:::decision
-        PromptTime["Nabídnout v UI posun časů o prodlevu /<br/>odmítnout: termín začátku již nastal"]:::fail
+        CheckTime{"Platí časové pravidlo<br/>currentTime <= start - 15 min?"}:::decision
+        PromptTime["Nabídnout v UI posun časů o prodlevu /<br/>odmítnout: do začátku zbývá méně než 15 min"]:::fail
         CheckHamster{"Je křeček<br/>aktivní?"}:::decision
         RejectAuth["Odmítnout: Neexistující nebo cizí"]:::fail
         RejectState["Odmítnout: Neplatný stav"]:::fail
@@ -177,7 +177,7 @@ flowchart TD
 
 ## 1.4 Diagram aktivit — OP-04: Zrušení rezervace (bod 9c)
 
-Znázorňuje průběh operace **Zrušení rezervace** rozdělený do plaveckých drah. Demonstruje okamžitý idempotentní úspěch při opakovaném volání na již zrušenou rezervaci (`REQ-09`), časové pravidlo stornování a spolehlivé uvolnění křečka.
+Znázorňuje průběh operace **Zrušení rezervace**. Demonstruje okamžitý idempotentní úspěch při opakovaném volání na již zrušenou rezervaci (`REQ-09`), časové pravidlo stornování a spolehlivé uvolnění křečka.
 
 ```mermaid
 flowchart TD
@@ -199,10 +199,10 @@ flowchart TD
         CheckAuthCancel{"Existuje rezervace a<br/>patří studentovi?"}:::decision
         CheckAlreadyCancelled{"Je již ve stavu<br/>CANCELLED?"}:::decision
         CheckAllowedState{"Je ve stavu<br/>DRAFT nebo CONFIRMED?"}:::decision
-        CheckCancelTime{"Platí časové pravidlo<br/>currentTime < start?"}:::decision
+        CheckCancelTime{"Platí časové pravidlo<br/>currentTime <= start - 15 min?"}:::decision
         RejectAuthCancel["Odmítnout: Neexistující nebo cizí"]:::fail
         RejectInvalidState["Odmítnout: Nepovolený výchozí stav"]:::fail
-        RejectPastTime["Odmítnout: Rezervace již začala / proběhla"]:::fail
+        RejectPastTime["Odmítnout: Do začátku zbývá méně než 15 min / již proběhla"]:::fail
     end
 
     subgraph DbLane["🗄️ Databáze (Perzistence)"]
@@ -246,7 +246,7 @@ Tato část rozšiřuje systém podle **Části B zadání C02**:
 2. **Blokování prostředku v `PENDING_APPROVAL`:**
    - Aby jiný student nemohl termín mezitím zabrat, rezervace ve stavu `PENDING_APPROVAL` **křečka dočasně blokuje a započítává se do denního limitu**.
 3. **Pravidla expirace a rušení:**
-   - **Expirace schválení:** Pokud učitel nerozhodne nejpozději **1 hodinu před začátkem rezervace** (nebo do okamžiku začátku), systém rezervaci automaticky převede do `EXPIRED` a křeček i limit se uvolní.
+   - **Expirace schválení:** Pokud správce křečka nerozhodne nejpozději **1 hodinu před začátkem rezervace** (nebo do okamžiku začátku), systém rezervaci automaticky převede do `EXPIRED` a křeček i limit se uvolní.
    - **Storno studentem:** Student může čekající žádost zrušit (`CANCELLED`) nejpozději 15 minut před začátkem rezervace, čímž se mu limit uvolní.
 
 ---
@@ -266,7 +266,7 @@ stateDiagram-v2
 
     DRAFT --> CONFIRMED : OP-03 Confirm [nevyžaduje schválení & splňuje pravidla]
     DRAFT --> PENDING_APPROVAL : OP-03 Confirm [vyžaduje schválení & splňuje pravidla]
-    DRAFT --> CANCELLED : OP-04 Cancel [storno před začátkem]
+    DRAFT --> CANCELLED : OP-04 Cancel [storno nejpozději 15 min před začátkem]
     DRAFT --> [*] : Uplynutí termínu bez potvrzení
     
     note right of PENDING_APPROVAL
@@ -274,28 +274,24 @@ stateDiagram-v2
         a dočasně čerpá denní limit.
     end note
 
-    PENDING_APPROVAL --> CONFIRMED : OP-05 Approve [schváleno učitelem před začátkem]
-    PENDING_APPROVAL --> REJECTED : OP-05 Reject [zamítnuto učitelem]
+    PENDING_APPROVAL --> CONFIRMED : OP-05 Approve [schváleno správcem křečka]
+    PENDING_APPROVAL --> REJECTED : OP-05 Reject [zamítnuto správcem křečka]
     PENDING_APPROVAL --> EXPIRED : Automatický časovač [1h před začátkem bez rozhodnutí]
-    PENDING_APPROVAL --> CANCELLED : OP-04 Cancel [storno studentem před začátkem]
+    PENDING_APPROVAL --> CANCELLED : OP-04 Cancel [storno studentem nejpozději 15 min před začátkem]
 
-    CONFIRMED --> CANCELLED : OP-04 Cancel [storno studentem před začátkem]
-    
-    note right of CANCELLED
-        Idempotentní opakování.
-    end note
+    CONFIRMED --> CANCELLED : OP-04 Cancel [storno studentem nejpozději 15 min před začátkem]
+    CONFIRMED --> [*] : Termín rezervace proběhl
 
-    CONFIRMED --> [*] : Uplynutí termínu rezervace (proběhla)
-    REJECTED --> [*] : Uvolněna alokace i limit
-    EXPIRED --> [*] : Uvolněna alokace i limit
-    CANCELLED --> [*] : Uvolněna alokace i limit
+    REJECTED --> [*]
+    EXPIRED --> [*]
+    CANCELLED --> [*]
 ```
 
 ---
 
 ## 2.2 Aktualizovaný diagram případů užití (v0.2)
 
-Do systému přibývá nová role aktéra (**Schvalovatel / Učitel**), systémový aktér (**Automatický časovač / Scheduler**) a nová operace **OP-05: Rozhodnout o rezervaci (Approve / Reject)**. Notifikační služba informuje učitele o nové žádosti a studenta o výsledku schválení/zamítnutí.
+Do systému přibývá nová role aktéra (**Správce křečka**), systémový aktér (**Automatický časovač / Scheduler**) a nová operace **OP-05: Rozhodnout o rezervaci (Approve / Reject)**. Notifikační služba informuje správce křečka o nové žádosti a studenta o výsledku schválení/zamítnutí.
 
 ```mermaid
 flowchart LR
@@ -305,7 +301,7 @@ flowchart LR
     classDef ucStyle fill:#ffffff,stroke:#37474f,stroke-width:1.5px,color:#263238;
 
     Student["👤 Student<br/><i>(primární aktér)</i>"]:::actorStyle
-    Approver["🧑‍🏫 Schvalovatel / Učitel<br/><i>(oprávněná osoba)</i>"]:::actorStyle
+    Approver["🧑‍🏫 Správce křečka<br/><i>(oprávněná osoba)</i>"]:::actorStyle
     Timer["⏱️ Systémový časovač<br/><i>(automatický plánovač)</i>"]:::timerStyle
     NotificationService["🔔 Notification Service<br/><i>(podpůrný externí systém)</i>"]:::extStyle
 
@@ -326,7 +322,7 @@ flowchart LR
     Approver --> UC5
     Timer --> UC6
 
-    UC3 -.->|"oznámení studentovi / žádost učiteli"| NotificationService
+    UC3 -.->|"oznámení studentovi / žádost správci křečka"| NotificationService
     UC4 -.->|"oznámení o zrušení"| NotificationService
     UC5 -.->|"oznámení o schválení / zamítnutí studentovi"| NotificationService
     UC6 -.->|"oznámení o vypršení termínu"| NotificationService

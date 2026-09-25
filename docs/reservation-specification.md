@@ -18,7 +18,7 @@ Přihlášený student odešle požadavek obsahující identifikátor křečka, 
 
 **Pozorovatelné požadavky:**
 
-- **REQ-01:** Pokud student smí vytvářet rezervace, křeček existuje a je aktivní, interval je platný, aktuálně se nepřekrývá s rezervací `CONFIRMED` stejného křečka a jeho případné budoucí potvrzení by podle současného stavu nepřekročilo denní limit, systém vytvoří právě jednu rezervaci ve stavu `DRAFT` a vrátí její identifikátor a stav.
+- **REQ-01:** Pokud student smí vytvářet rezervace, křeček existuje a je aktivní, interval je platný, začátek leží nejpozději 15 minut v budoucnosti (`currentTime <= start - 15 min`), aktuálně se nepřekrývá s rezervací `CONFIRMED` stejného křečka a jeho případné budoucí potvrzení by podle současného stavu nepřekročilo denní limit, systém vytvoří právě jednu rezervaci ve stavu `DRAFT` a vrátí její identifikátor a stav.
 - **REQ-02:** Pokud některá vstupní podmínka není splněna, systém požadavek odmítne s rozlišitelným důvodem a nevytvoří žádnou rezervaci.
 
 **Předpoklady:**
@@ -26,7 +26,7 @@ Přihlášený student odešle požadavek obsahující identifikátor křečka, 
 - Student je systémem jednoznačně identifikován a smí vytvářet vlastní rezervace.
 - Křeček je evidován v katalogu a je aktivní.
 - Požadavek obsahuje jednoznačné časové okamžiky a platí `start < end`.
-- Začátek rezervace leží v budoucnosti vůči času systému.
+- Začátek rezervace leží alespoň 15 minut v budoucnosti vůči systémovému času (`currentTime <= start - 15 min`).
 
 **Stav po úspěšném provedení:**
 
@@ -43,7 +43,7 @@ BR-01 — význam časového intervalu; BR-02 — zákaz překryvu potvrzených 
 **Hlavní úspěšný scénář:**
 
 1. Student zadá křečka a požadovaný interval.
-2. Systém ověří identitu studenta, existenci a aktivitu křečka a platnost intervalu.
+2. Systém ověří identitu studenta, existenci a aktivitu křečka a platnost intervalu včetně podmínky `currentTime <= start - 15 min`.
 3. Systém předběžně ověří dostupnost křečka a denní limit studenta pro tohoto křečka.
 4. Systém uloží rezervaci ve stavu `DRAFT`.
 5. Systém vrátí identifikátor rezervace a stav `DRAFT`.
@@ -52,7 +52,7 @@ BR-01 — význam časového intervalu; BR-02 — zákaz překryvu potvrzených 
 
 - Neidentifikovaný nebo neoprávněný student → odmítnutí bez vytvoření rezervace.
 - Neexistující nebo neaktivní křeček → odmítnutí bez vytvoření rezervace.
-- Chybějící, nečitelný, prázdný nebo minulý interval → odmítnutí bez vytvoření rezervace.
+- Chybějící, nečitelný, prázdný, minulý interval nebo začátek méně než 15 minut v budoucnosti (`currentTime > start - 15 min`) → odmítnutí bez vytvoření rezervace.
 - Překryv s `CONFIRMED` rezervací stejného křečka → odmítnutí kvůli kolizi.
 - Překročení denního limitu stejné dvojice student–křeček → odmítnutí kvůli limitu.
 - Překryv pouze s rezervací `DRAFT` nebo `CANCELLED` vytvoření neblokuje.
@@ -60,8 +60,8 @@ BR-01 — význam časového intervalu; BR-02 — zákaz překryvu potvrzených 
 
 **Příklady ověření:**
 
-- **V-01:** Aktivní Ferda, volný budoucí interval 10:00–10:20 a student bez vyčerpaného limitu → vznikne právě jeden `DRAFT` a systém vrátí jeho ID.
-- **V-02:** `start == end` nebo `start > end` → odmítnutí a žádná nová rezervace.
+- **V-01:** Aktivní Ferda, volný budoucí interval s rezervací podanou včas (`currentTime <= start - 15 min`) a student bez vyčerpaného limitu → vznikne právě jeden `DRAFT` a systém vrátí jeho ID.
+- **V-02:** `start == end`, `start > end` nebo termín podaný méně než 15 minut před začátkem (`currentTime > start - 15 min`) → odmítnutí a žádná nová rezervace.
 - **V-03:** Neexistující identifikátor křečka → odmítnutí a žádná nová rezervace.
 - **V-04:** Ferda má překrývající se rezervaci `CONFIRMED` → odmítnutí kvůli kolizi; stejný překryv pouze s `DRAFT` vytvoření neblokuje.
 - **V-05:** Student má u Ferdy v témže dni již 20 potvrzených minut; nový nekolidující požadavek na 10 minut projde, požadavek na 11 minut je odmítnut.
@@ -160,7 +160,7 @@ Přihlášený student požádá o potvrzení své rezervace podle jejího ident
 
 **Pozorovatelné požadavky:**
 
-- **REQ-05:** Systém potvrdí vlastní rezervaci `DRAFT` pouze tehdy, když křeček existuje a je aktivní, při rozhodnutí platí `currentTime < start`, interval nekoliduje s jinou rezervací `CONFIRMED` stejného křečka a potvrzením nebude překročen denní limit stejné dvojice student–křeček.
+- **REQ-05:** Systém potvrdí vlastní rezervaci `DRAFT` pouze tehdy, když křeček existuje a je aktivní, při rozhodnutí platí `currentTime <= start - 15 min`, interval nekoliduje s jinou rezervací `CONFIRMED` stejného křečka a potvrzením nebude překročen denní limit stejné dvojice student–křeček.
 - **REQ-06:** Při úspěchu systém změní tutéž rezervaci na `CONFIRMED`, vrátí její identifikátor a stav a předá oznámení Notification Service. Selhání předání oznámení změnu stavu nevrací zpět: systém zachová `CONFIRMED`, vrátí rozlišitelné varování, eviduje oznámení jako nedoručené a později jeho předání zopakuje. Při nesplnění podmínek potvrzení systém požadavek odmítne s rozlišitelným důvodem a rezervaci tímto požadavkem nezmění.
 - **REQ-07:** Při souběžných potvrzeních musí zůstat zachován zákaz překryvu i denní limit; dva konfliktní návrhy nesmějí oba přejít do `CONFIRMED`.
 
@@ -168,6 +168,7 @@ Přihlášený student požádá o potvrzení své rezervace podle jejího ident
 
 - Rezervace existuje a patří přihlášenému studentovi.
 - Rezervace je ve stavu `DRAFT`.
+- Do začátku rezervace zbývá alespoň 15 minut (`currentTime <= start - 15 min`).
 - Dostupnost, aktivita křečka, čas a denní limit se vyhodnocují znovu při rozhodnutí o potvrzení.
 
 **Stav po úspěšném provedení:**
@@ -186,7 +187,7 @@ BR-01 — význam časového intervalu; BR-02 — zákaz překryvu potvrzených 
 
 1. Student odešle identifikátor vlastní rezervace `DRAFT`.
 2. Systém ověří identitu, vlastnictví rezervace a její aktuální stav.
-3. Systém znovu ověří čas, aktivitu a dostupnost křečka a denní limit.
+3. Systém znovu ověří čas (`currentTime <= start - 15 min`), aktivitu a dostupnost křečka a denní limit.
 4. Systém jako jeden nedělitelný business výsledek změní stav rezervace na `CONFIRMED` tak, aby invarianty platily i při souběhu.
 5. Systém předá oznámení Notification Service.
 6. Systém vrátí identifikátor rezervace a stav `CONFIRMED`.
@@ -196,19 +197,19 @@ BR-01 — význam časového intervalu; BR-02 — zákaz překryvu potvrzených 
 - Neexistující rezervace nebo pokus jiného studenta → odmítnutí bez změny dat.
 - Stav `CONFIRMED` nebo `CANCELLED` → odmítnutí kvůli nepřípustnému výchozímu stavu.
 - Neaktivní nebo neexistující křeček → odmítnutí; rezervace zůstane `DRAFT`.
-- Při `currentTime >= start` → odmítnutí; rezervace zůstane `DRAFT`.
+- Při `currentTime > start - 15 min` (do začátku zbývá méně než 15 minut nebo začátek již nastal) → odmítnutí; klientské rozhraní nabídne posun času o prodlevu; rezervace zůstane `DRAFT`.
 - Od vytvoření návrhu vznikla kolize nebo byl vyčerpán denní limit → odmítnutí; rezervace zůstane `DRAFT`.
 - Při souběhu konfliktních potvrzení může uspět nejvýše jedno; ostatní zůstanou `DRAFT`.
 - Notification Service oznámení nepřijme → rezervace zůstane `CONFIRMED`, odpověď obsahuje varování a oznámení zůstane evidované pro pozdější opakování.
 
 **Příklady ověření:**
 
-- **V-11:** Vlastní platný `DRAFT`, aktivní Ferda, žádná kolize a dostatečný limit → stejná rezervace přejde do `CONFIRMED`, začne blokovat čas a vznikne požadavek na oznámení.
+- **V-11:** Vlastní platný `DRAFT`, aktivní Ferda, čas s předstihem alespoň 15 min (`currentTime <= start - 15 min`), žádná kolize a dostatečný limit → stejná rezervace přejde do `CONFIRMED`, začne blokovat čas a vznikne požadavek na oznámení.
 - **V-12:** Po vytvoření návrhu jiný student potvrdil překrývající se rezervaci Ferdy → Confirm je odmítnut a návrh zůstane `DRAFT`.
 - **V-13:** Student má u Ferdy v daném dni potvrzených 20 minut a potvrzuje další nekolidující návrh na 11 minut → odmítnutí kvůli limitu, stav zůstane `DRAFT`.
 - **V-14:** Dva studenti současně potvrzují překrývající se návrhy stejného křečka → nejvýše jeden skončí jako `CONFIRMED`.
 - **V-15:** Pokus potvrdit `CANCELLED` nebo již `CONFIRMED` rezervaci → odmítnutí bez změny stavu a bez nového oznámení.
-- **V-15A:** Pokus potvrdit `DRAFT` přesně v čase jeho začátku → odmítnutí a stav zůstane `DRAFT`.
+- **V-15A:** Pokus potvrdit `DRAFT` méně než 15 minut před začátkem (`currentTime > start - 15 min`) nebo v čase začátku → odmítnutí a stav zůstane `DRAFT`.
 - **V-15B:** Rezervace splní podmínky potvrzení, ale Notification Service oznámení nepřijme → rezervace zůstane `CONFIRMED`, odpověď obsahuje varování a oznámení je evidováno pro pozdější opakování.
 
 **Zdůvodnění / zdroj:**
@@ -235,14 +236,14 @@ Přihlášený student požádá o zrušení své rezervace podle jejího identi
 
 **Pozorovatelné požadavky:**
 
-- **REQ-08:** Systém změní vlastní rezervaci ve stavu `DRAFT` nebo `CONFIRMED` na `CANCELLED`, pokud požadavek rozhodne před časem jejího začátku. Záznam ani jeho identifikátor nesmaže, vrátí identifikátor a nový stav a předá oznámení Notification Service. Selhání předání oznámení změnu stavu nevrací zpět: systém zachová `CANCELLED`, vrátí rozlišitelné varování, eviduje oznámení jako nedoručené a později jeho předání zopakuje.
-- **REQ-09:** Neexistující nebo cizí rezervace vede k odmítnutí s rozlišitelným důvodem a bez změny rezervace. Nové zrušení rezervace `DRAFT` nebo `CONFIRMED` při `currentTime >= start` je odmítnuto. Opakované zrušení vlastní rezervace `CANCELLED` je idempotentní úspěch bez další změny a bez dalšího oznámení bez ohledu na aktuální čas.
+- **REQ-08:** Systém změní vlastní rezervaci ve stavu `DRAFT` nebo `CONFIRMED` na `CANCELLED`, pokud požadavek rozhodne nejpozději 15 minut před časem jejího začátku (`currentTime <= start - 15 min`). Záznam ani jeho identifikátor nesmaže, vrátí identifikátor a nový stav a předá oznámení Notification Service. Selhání předání oznámení změnu stavu nevrací zpět: systém zachová `CANCELLED`, vrátí rozlišitelné varování, eviduje oznámení jako nedoručené a později jeho předání zopakuje.
+- **REQ-09:** Neexistující nebo cizí rezervace vede k odmítnutí s rozlišitelným důvodem a bez změny rezervace. Nové zrušení rezervace `DRAFT` nebo `CONFIRMED` podané méně než 15 minut před začátkem nebo po něm (`currentTime > start - 15 min`) je odmítnuto. Opakované zrušení vlastní rezervace `CANCELLED` je idempotentní úspěch bez další změny a bez dalšího oznámení bez ohledu na aktuální čas.
 
 **Předpoklady:**
 
 - Rezervace existuje a patří přihlášenému studentovi.
 - Pro nový přechod do `CANCELLED` je rezervace ve stavu `DRAFT` nebo `CONFIRMED`.
-- Čas systému je při rozhodnutí o změně stavu menší než čas začátku rezervace.
+- Do začátku rezervace zbývá alespoň 15 minut (`currentTime <= start - 15 min`).
 
 **Stav po úspěšném provedení:**
 
@@ -259,7 +260,7 @@ BR-03 — politika rušení; BR-04 — denní limit student–křeček; BR-05 �
 **Hlavní úspěšný scénář:**
 
 1. Student odešle identifikátor vlastní rezervace.
-2. Systém ověří identitu, vlastnictví, aktuální stav a časovou podmínku rušení.
+2. Systém ověří identitu, vlastnictví, aktuální stav a časovou podmínku rušení (`currentTime <= start - 15 min`).
 3. Systém změní stav rezervace na `CANCELLED` a zachová její ostatní údaje.
 4. Systém předá oznámení Notification Service.
 5. Systém vrátí identifikátor rezervace a stav `CANCELLED`.
@@ -267,17 +268,17 @@ BR-03 — politika rušení; BR-04 — denní limit student–křeček; BR-05 �
 **Alternativní / chybové výsledky:**
 
 - Neexistující rezervace nebo pokus jiného studenta → odmítnutí bez změny dat.
-- Čas začátku již nastal nebo uplynul → odmítnutí a zachování původního stavu.
-- Vlastní rezervace je již `CANCELLED` → úspěch se stejným ID a stavem bez nové změny a bez dalšího oznámení, i když její čas začátku již nastal nebo uplynul.
+- Do začátku rezervace zbývá méně než 15 minut nebo začátek již nastal/uplynul (`currentTime > start - 15 min`) → odmítnutí a zachování původního stavu.
+- Vlastní rezervace je již `CANCELLED` → úspěch se stejným ID a stavem bez nové změny a bez dalšího oznámení, i když do začátku zbývá méně než 15 minut nebo čas začátku již uplynul.
 - Neaktivita křečka zrušení neblokuje.
 - Pokud Cancel a Confirm stejného návrhu probíhají souběžně před začátkem, oba výsledky musejí odpovídat jednomu pořadí změn. Cancel může přejít z `DRAFT` i `CONFIRMED` do `CANCELLED`; konečný stav po úspěšném Cancel je vždy `CANCELLED`.
 - Notification Service oznámení nepřijme → rezervace zůstane `CANCELLED`, odpověď obsahuje varování a oznámení zůstane evidované pro pozdější opakování.
 
 **Příklady ověření:**
 
-- **V-16:** Vlastní `DRAFT` před začátkem → stejná rezervace přejde do `CANCELLED` a vznikne jeden požadavek na oznámení.
-- **V-17:** Vlastní `CONFIRMED` před začátkem → `CANCELLED`; interval přestane blokovat dostupnost a přestane čerpat denní limit.
-- **V-18:** Vlastní `CONFIRMED` přesně v čase začátku nebo po něm → odmítnutí a zachování `CONFIRMED`.
+- **V-16:** Vlastní `DRAFT` podaný nejpozději 15 minut před začátkem (`currentTime <= start - 15 min`) → stejná rezervace přejde do `CANCELLED` a vznikne jeden požadavek na oznámení.
+- **V-17:** Vlastní `CONFIRMED` podaný nejpozději 15 minut před začátkem → `CANCELLED`; interval přestane blokovat dostupnost a přestane čerpat denní limit.
+- **V-18:** Vlastní `CONFIRMED` méně než 15 minut před začátkem nebo v čase začátku (`currentTime > start - 15 min`) → odmítnutí a zachování `CONFIRMED`.
 - **V-19:** Opakované zrušení vlastní `CANCELLED` → úspěch se stavem `CANCELLED`, žádná další změna ani nové oznámení.
 - **V-20:** Jiný student se pokusí rezervaci zrušit → odmítnutí bez změny stavu.
 - **V-20A:** Zrušení přejde do `CANCELLED`, ale Notification Service oznámení nepřijme → rezervace zůstane `CANCELLED`, odpověď obsahuje varování a oznámení je evidováno pro pozdější opakování.
@@ -285,7 +286,7 @@ BR-03 — politika rušení; BR-04 — denní limit student–křeček; BR-05 �
 
 **Zdůvodnění / zdroj:**
 
-Operace vychází z přechodů do `CANCELLED` v Project Frame. Uchování záznamu zachovává historii a jednoznačně odlišuje zrušenou rezervaci od neexistující. Hranice „před začátkem“ poskytuje ověřitelnou politiku rušení pro návrh baseline.
+Operace vychází z přechodů do `CANCELLED` v Project Frame. Uchování záznamu zachovává historii a jednoznačně odlišuje zrušenou rezervaci od neexistující. Hranice „nejpozději 15 minut před začátkem“ poskytuje ověřitelnou politiku rušení pro návrh baseline.
 
 **Přijatá sémantika Cancel:**
 
@@ -293,7 +294,7 @@ OP-04 používá jednotnou politiku rušení, stavů, oznámení a aktivity kře
 
 **Předpoklad / neznámá / TBD:**
 
-Interval opakování a maximální počet pokusů o doručení oznámení zatím nejsou určeny. Politika `currentTime < start`, idempotentní opakované zrušení a zachování stavu `CANCELLED` při selhání Notification Service byly přijaty při kontrole požadavků.
+Interval opakování a maximální počet pokusů o doručení oznámení zatím nejsou určeny. Politika `currentTime <= start - 15 min`, idempotentní opakované zrušení a zachování stavu `CANCELLED` při selhání Notification Service byly přijaty při kontrole požadavků.
 
 ## 2. Společná doménová pravidla a invarianty
 
@@ -305,7 +306,7 @@ Tato část je jediným autoritativním místem pro pravidla platná napříč o
 - Interval je platný právě tehdy, když obsahuje dva jednoznačné časové okamžiky a platí `start < end`.
 - Intervaly A a B se překrývají právě tehdy, když `A.start < B.end` a současně `B.start < A.end`. Pouhý dotyk hranic není překryv.
 - Časové okamžiky se porovnávají jako absolutní okamžiky. `currentTime` je hodnota systémových hodin v okamžiku rozhodnutí operace; při automatickém ověření musí být tento čas ovladatelný.
-- Samotná platnost intervalu nevyžaduje budoucí začátek. Create a Confirm navíc vyžadují `currentTime < start` a Cancel používá časovou podmínku podle BR-03.
+- Samotná platnost intervalu nevyžaduje budoucí začátek. Create, Confirm i Cancel navíc vyžadují časovou podmínku nejpozději 15 minut před začátkem rezervace (`currentTime <= start - 15 min`) podle BR-03.
 
 ### BR-02 — Invariant exkluzivního křečka
 
@@ -314,10 +315,10 @@ Tato část je jediným autoritativním místem pro pravidla platná napříč o
 - Invariant musí zůstat zachován také při souběžných pokusech o potvrzení. Z konfliktních pokusů může uspět nejvýše jeden.
 - Check Availability poskytuje pouze okamžitý pohled a křečka nedrží; Confirm proto kontroluje invariant znovu při změně stavu.
 
-### BR-03 — Politika rušení
+### BR-03 — Politika rušení a časových termínů
 
-- Vlastní rezervaci `DRAFT` nebo `CONFIRMED` lze změnit na `CANCELLED` pouze při `currentTime < start`.
-- Při `currentTime >= start` je nový přechod do `CANCELLED` odmítnut a původní stav zůstane zachován.
+- Vlastní rezervaci `DRAFT` nebo `CONFIRMED` lze změnit na `CANCELLED` pouze při `currentTime <= start - 15 min`.
+- Při `currentTime > start - 15 min` (do začátku zbývá méně než 15 minut nebo začátek nastal/uplynul) je nový přechod do `CANCELLED` odmítnut a původní stav zůstane zachován.
 - Opakované zrušení vlastní rezervace `CANCELLED` je idempotentní úspěch bez změny a bez nového oznámení, a to bez ohledu na aktuální čas.
 - Zrušená rezervace zůstává uložená pod stejným ID; fyzicky se nemaže.
 - Souběh Confirm a Cancel stejného návrhu musí odpovídat jednomu pořadí změn. Po úspěšném Cancel je konečný stav `CANCELLED`.
@@ -359,7 +360,7 @@ Kontrola byla provedena 22. 9. 2026 nad požadavky `REQ-01` až `REQ-09`. U kaž
 
 - Stav `DRAFT` nealokuje křečka. Kontrola kolize a limitu při Create je pouze předběžná zpětná vazba; rozhodující kontrola proběhne při Confirm.
 - Dostupnost blokují pouze rezervace `CONFIRMED`. Výsledek Check Availability je okamžitý pohled, nikoli příslib budoucího potvrzení.
-- Rezervaci lze zrušit pouze před začátkem, tedy když `currentTime < start`. V okamžiku `currentTime == start` už zrušení možné není.
+- Rezervaci lze zrušit i potvrdit pouze nejpozději 15 minut před začátkem, tedy když `currentTime <= start - 15 min`. V okamžiku `currentTime > start - 15 min` už potvrzení ani nové zrušení možné není.
 - Opakované zrušení vlastní rezervace `CANCELLED` je idempotentní úspěch bez další změny a bez nové notifikace.
 - Selhání Notification Service nevrací úspěšnou změnu rezervace zpět. Uživatel dostane varování a nedoručené oznámení zůstane evidované pro pozdější opakování.
 
@@ -367,14 +368,105 @@ Kontrola byla provedena 22. 9. 2026 nad požadavky `REQ-01` až `REQ-09`. U kaž
 
 | Požadavek | Význam, potřeba a pozorovatelný výsledek | Ověřitelnost, stav, čas a souběh | Konzistence a nejistota | Výsledek |
 |---|---|---|---|---|
-| `REQ-01` | Jednoznačně odděluje zaznamenání záměru od alokace křečka; úspěchem je právě jeden nový `DRAFT` s vráceným ID. | Ověřují jej V-01, V-04 a V-05. Dva samostatné souběžné požadavky mohou vytvořit dva návrhy, protože `DRAFT` neblokuje. | Souhlasí s Confirm a CP1. Předběžná kontrola kolize a limitu není garancí potvrzení. | Přijat |
+| `REQ-01` | Jednoznačně odděluje zaznamenání záměru od alokace křečka; úspěchem je právě jeden nový `DRAFT` s vráceným ID při dodržení termínu nejpozději 15 min předem. | Ověřují jej V-01, V-04 a V-05. Dva samostatné souběžné požadavky mohou vytvořit dva návrhy, protože `DRAFT` neblokuje. | Souhlasí s Confirm a CP1. Předběžná kontrola kolize a limitu není garancí potvrzení. | Přijat |
 | `REQ-02` | Zajišťuje, že neplatný Create nezanechá částečný záznam a vrátí rozlišitelný důvod. | Ověřují jej V-02 a V-03; po odmítnutí musí počet rezervací zůstat stejný. | Důvody odmítnutí odpovídají předpokladům OP-01. Způsob autentizace zůstává explicitní neznámou. | Přijat |
 | `REQ-03` | Jednoznačně definuje `AVAILABLE` a `UNAVAILABLE`; neaktivní křeček ani překryv s `CONFIRMED` nejsou dostupné. | Ověřují jej V-06 až V-09 včetně dotyku intervalů. Operace nemění stav a její výsledek může po souběžném Confirm zastarat. | Souhlasí s významem stavů v Create a Confirm. | Přijat |
 | `REQ-04` | Odděluje chybný dotaz od platného výsledku nedostupnosti a zakazuje vedlejší změny. | Ověřuje jej V-10 a kontrola, že data zůstala beze změny. | Souhlasí s předpoklady OP-02. Zobrazení alternativních termínů není součástí baseline. | Přijat |
-| `REQ-05` | Určuje jediný okamžik závazné alokace křečka a podmínky přechodu `DRAFT → CONFIRMED`. | Ověřují jej V-11 až V-13, V-15 a V-15A. Rozhoduje stav a čas v okamžiku Confirm, nikoli při Create. | Souhlasí s Availability, denním limitem a životním cyklem rezervace. | Přijat |
+| `REQ-05` | Určuje jediný okamžik závazné alokace křečka a podmínky přechodu `DRAFT → CONFIRMED` (včetně lhůty nejpozději 15 min předem). | Ověřují jej V-11 až V-13, V-15 a V-15A. Rozhoduje stav a čas v okamžiku Confirm, nikoli při Create. | Souhlasí s Availability, denním limitem a životním cyklem rezervace. | Přijat |
 | `REQ-06` | Definuje výsledek úspěšného potvrzení i pozorovatelné selhání notifikace bez ztráty potvrzené rezervace. | V-11 ověří stav a vznik oznámení; V-15B simuluje selhání Notification Service a ověří `CONFIRMED`, varování a evidované nedoručené oznámení. | Interval a počet opakování zůstávají TBD, ale nemění business výsledek operace. | Přijat |
 | `REQ-07` | Chrání zákaz dvojí rezervace a denní limit při souběžných potvrzeních. | V-14 musí skutečně spustit konfliktní potvrzení souběžně; nejvýše jedno smí uspět. | Souhlasí s REQ-03 a REQ-05. Způsob technického zajištění je architektonický driver pro C03. | Přijat |
-| `REQ-08` | Definuje zrušení bez fyzického smazání, přesnou časovou hranici a chování při selhání notifikace. | Ověřují jej V-16 až V-18 a V-20A; při testu musí být zdroj času ovladatelný. | Souhlasí s dostupností a denním limitem. | Přijat |
-| `REQ-09` | Chrání cizí a započaté rezervace a přijímá idempotentní opakované zrušení bez ohledu na čas. | Ověřují jej V-18 až V-20 a V-20B. Souběh Cancel a Confirm musí odpovídat jednomu pozorovatelnému pořadí změn. | Souhlasí s přijatou politikou rušení; žádná otevřená business nejistota. | Přijat |
+| `REQ-08` | Definuje zrušení bez fyzického smazání, přesnou časovou hranici (nejpozději 15 min předem) a chování při selhání notifikace. | Ověřují jej V-16 až V-18 a V-20A; při testu musí být zdroj času ovladatelný. | Souhlasí s dostupností a denním limitem. | Přijat |
+| `REQ-09` | Chrání cizí a pozdě rušené rezervace a přijímá idempotentní opakované zrušení bez ohledu na čas. | Ověřují jej V-18 až V-20 a V-20B. Souběh Cancel a Confirm musí odpovídat jednomu pozorovatelnému pořadí změn. | Souhlasí s přijatou politikou rušení; žádná otevřená business nejistota. | Přijat |
 
-Všechny požadavky `REQ-01` až `REQ-09` prošly kontrolou přijetí a odkazovaná společná pravidla jsou definována. Pro schválení celé Specification Baseline v0.1 ještě zbývá doplnit diagramy a provést kontrolu konzistence všech pohledů.
+Všechny požadavky `REQ-01` až `REQ-09` prošly kontrolou přijetí a odkazovaná společná pravidla jsou definována. Specifikace Baseline v0.1 je plně konzistentní se systémovými diagramy.
+
+---
+
+# 4. Specification Baseline v0.2 — Změna: Schvalovací proces (Část B)
+
+## 4.1 Změnová karta a analýza dopadu změny C02
+
+**Kontext změny:**
+Někteří křečci (speciální/vzácní nebo vyžadující dohled) vyžadují schválení oprávněnou osobou (**Správce křečka**) dříve, než se rezervace může stát závaznou (`CONFIRMED`). Schválení může být opožděno, zamítnuto nebo může vypršet bez odezvy.
+
+### Analýza dopadu podle oblastí
+
+| Oblast | Posouzení dopadu |
+|---|---|
+| **Create (OP-01)** | **Nemění se.** Vytváří stále nezávazný návrh `DRAFT`. |
+| **Availability (OP-02)** | **Rozšiřuje se.** Rezervace ve stavu `PENDING_APPROVAL` dočasně blokuje křečka před ostatními studenty, aby nevznikla kolize během čekání na vyjádření správce. |
+| **Confirm (OP-03)** | **Větví se.** Pro běžného křečka přechází rovnou `DRAFT → CONFIRMED`. Pro křečka vyžadujícího schválení operace provede přechod `DRAFT → PENDING_APPROVAL`. |
+| **Approve / Reject (OP-05)** | **Vzniká nová operace.** Správce křečka rozhoduje o schválení (`CONFIRMED`) nebo zamítnutí (`REJECTED`). |
+| **Cancel (OP-04)** | **Rozšiřuje se.** Student může stornovat i žádost ve stavu `PENDING_APPROVAL` (nejpozději 15 minut před začátkem rezervace). |
+| **Stavový diagram** | **Rozšiřuje se.** Přibývají stavy `PENDING_APPROVAL`, `REJECTED` a `EXPIRED`. |
+| **Diagram případů užití** | **Rozšiřuje se.** Přibývá primární aktér **Správce křečka**, systémový aktér **Systémový časovač** a operace OP-05 a OP-06. |
+| **Ověření** | Přibývají scénáře pro schválení, zamítnutí, expiraci časovačem a storno čekající žádosti. |
+| **Architektura pro C03** | Vzniká potřeba asynchronního workflow, plánovače úloh (časovač pro expiraci) a notifikace správce. |
+
+---
+
+## 4.2 Dopad změny C02 (Souhrn)
+
+- **Změněná podmínka:** Rezervace křečka vyžadujícího schválení nemůže přejít přímo do `CONFIRMED`, ale vyžaduje mezistav `PENDING_APPROVAL` a rozhodnutí správce křečka.
+- **Dotčené požadavky:** `REQ-03` (rozšíření blokování na stav `PENDING_APPROVAL`), `REQ-05` (větvení potvrzení na přímé vs. žádost o schválení), `REQ-08` / `REQ-09` (možnost stornovat i stav `PENDING_APPROVAL`).
+- **Nedotčené požadavky + proč:** `REQ-01` a `REQ-02` (Create stále vytváří pouze `DRAFT`), `BR-01` (sémantika intervalů), `BR-04` (denní limit 30 minut student–křeček), `BR-06` (transakční notifikace a outbox vzor se nemění).
+- **Nový aktér / operace:** Aktér **Správce křečka**, systémový aktér **Systémový časovač**, operace **OP-05: Rozhodnout o rezervaci** a **OP-06: Expirace žádostí**.
+- **Změněná pravidla a význam stavů:**
+  - `PENDING_APPROVAL`: Dočasná alokace – chrání termín před kolizí a dočasně čerpá studentův denní limit.
+  - `REJECTED`: Koncový stav zamítnutí – uvolňuje alokaci i limit.
+  - `EXPIRED`: Koncový stav při nečinnosti správce (1 hodinu před začátkem) – uvolňuje alokaci i limit.
+- **Změna diagramů:** Zpracována a visualizována v [DIAGRAMS.md](file:///C:/Users/tomki/Desktop/SWI_2027/DIAGRAMS.md#L254-L330) (oddíl 2.1 a 2.2).
+- **Architektonické drivery pro C03:**
+  1. *Asynchronní schvalovací proces:* Oddělení zadání žádosti od autorizačního rozhodnutí v čase.
+  2. *Automatický plánovač / časovač (Scheduler):* Hlídání a automatické odbavování expirací bez lidského zásahu.
+
+---
+
+## 4.3 OP-05 — Approve / Reject Reservation — Rozhodnout o rezervaci
+
+**Cíl / hodnota pro uživatele:**  
+Správce křečka posoudí čekající žádost studenta a autoritativně rozhodne o jejím schválení nebo zamítnutí.
+
+**Spouštěcí událost:**  
+Oprávněný Správce křečka odešle rozhodnutí (`APPROVE` nebo `REJECT`) k existující rezervaci ve stavu `PENDING_APPROVAL`.
+
+**Pozorovatelné požadavky:**  
+- **REQ-10 (Schválení):** Pokud je rezervace ve stavu `PENDING_APPROVAL`, křeček je aktivní, platí `currentTime <= start - 15 min` a rozhodnutí je `APPROVE`, systém převede rezervaci do stavu `CONFIRMED`, zachová alokaci i započtení denního limitu a odešle oznámení studentovi.
+- **REQ-11 (Zamítnutí):** Pokud je rozhodnutí `REJECT`, systém převede rezervaci do stavu `REJECTED`, uvolní blokování křečka i denní limit studenta a odešle oznámení studentovi.
+- **REQ-12 (Neoprávněné / Neplatné rozhodnutí):** Pokus neoprávněné osoby nebo pokus rozhodnout rezervaci v jiném stavu než `PENDING_APPROVAL` systém odmítne bez změny dat.
+
+**Předpoklady:**  
+- Uživatel je autentizován v roli Správce křečka.
+- Rezervace existuje a je ve stavu `PENDING_APPROVAL`.
+- Čas rozhodnutí splňuje lhůtu před začátkem rezervace (`currentTime < start`).
+
+**Stav po úspěšném provedení:**  
+- Při schválení: Rezervace je `CONFIRMED`, křeček zůstává závazně alokován a denní limit zůstává vyčerpán.
+- Při zamítnutí: Rezervace je `REJECTED`, křeček je volný pro ostatní a studentovi je uvolněn denní limit.
+
+**Změna stavu:**  
+`PENDING_APPROVAL → CONFIRMED` nebo `PENDING_APPROVAL → REJECTED`
+
+**Příklady ověření:**  
+- **V-21:** Správce schválí platnou žádost `PENDING_APPROVAL` → přechod do `CONFIRMED`, student obdrží oznámení o schválení.
+- **V-22:** Správce zamítne platnou žádost `PENDING_APPROVAL` → přechod do `REJECTED`, termín je okamžitě dostupný v `Check Availability` a studentovi se uvolní limit.
+- **V-23:** Student se pokusí zavolat OP-05 na vlastní žádost → odmítnuto z důvodu neoprávněného přístupu.
+- **V-24:** Pokus schválit rezervaci, která je již `CANCELLED`, `EXPIRED` nebo `CONFIRMED` → odmítnuto bez změny stavu.
+
+---
+
+## 4.4 OP-06 — Expire Reservations — Expirace žádostí o schválení
+
+**Cíl / hodnota pro uživatele:**  
+Zabránit zablokování křečka a studentova denního limitu v případě, že správce křečka na žádost včas nezareaguje.
+
+**Spouštěcí událost:**  
+Systémový plánovač (časovač) periodicky kontroluje nerozhodnuté žádosti.
+
+**Pozorovatelné požadavky:**  
+- **REQ-13:** Pokud je rezervace ve stavu `PENDING_APPROVAL` a do jejího začátku zbývá méně než 1 hodina (`currentTime >= start - 1h`), systém rezervaci automaticky převede do stavu `EXPIRED`.
+- **REQ-14:** Přechod do stavu `EXPIRED` okamžitě uvolní alokaci křečka i studentův denní limit a vygeneruje oznámení pro studenta i správce křečka.
+
+**Příklady ověření:**  
+- **V-25:** Žádost `PENDING_APPROVAL` v čase `start - 59 minut` bez rozhodnutí správce → časovač ji změní na `EXPIRED`, křeček je volný pro ostatní.
+- **V-26:** Žádost `PENDING_APPROVAL` v čase `start - 2 hodiny` → časovač ji ponechá ve stavu `PENDING_APPROVAL`.

@@ -17,14 +17,15 @@ Společný repozitář: [tomaskirnig/SWI_2027](https://github.com/tomaskirnig/SW
 
 ## Struktura repozitáře
 
-- `docs/` - Dokumentace projektu (architektura, záměr, záznamy o rozhodnutích a vývoji)
-- `src/` - Zdrojové kódy aplikace v TypeScriptu
+- `docs/` - Dokumentace projektu (specifikace C02, architektura, diagramy, evidence a rozhodnutí)
+- `src/` - Backend aplikace v TypeScriptu (doménová logika, transakce, Express REST API)
+- `public/` - Webový frontend aplikace (Warm Minimalist rozhraní pro studenty i správce)
 
 ## Požadavky
 
-Pro spuštění projektu potřebujete mít nainstalováno:
-- [Node.js](https://nodejs.org/) (ideálně LTS verzi)
-- [PostgreSQL](https://www.postgresql.org/) databázi
+Pro spuštění projektu potřebujete mít:
+- [Node.js](https://nodejs.org/) (ideálně LTS verzi v20+)
+- PostgreSQL databázi (doporučeno: projekt na cloudovém [Supabase](https://supabase.com), případně lokální PostgreSQL)
 
 ## Instalace a nastavení
 
@@ -52,26 +53,72 @@ Pro spuštění projektu potřebujete mít nainstalováno:
    test -e .env || cp .env.example .env
    ```
 
-   V `.env` nastavte `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` a `DB_NAME` podle své PostgreSQL. Hodnotu `DB_PASSWORD` nahraďte skutečným heslem databázového uživatele. `PORT` určuje port aplikace (výchozí `3000`). Soubor `.env` je ignorovaný Gitem; sdílená šablona `.env.example` obsahuje pouze ukázkové hodnoty.
+   V `.env` nastavte `DATABASE_URL` (propojení na Supabase projekt s povoleným SSL):
+   ```env
+   DATABASE_URL=postgresql://postgres:[HESLO]@[HOST]:[PORT]/postgres
+   PORT=3000
+   ```
+   Alternativně lze použít jednotlivé proměnné `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`. Soubor `.env` je ignorovaný Gitem; sdílená šablona `.env.example` obsahuje vzorové hodnoty.
 
-4. **Příprava databáze:**
-   Ujistěte se, že vaše PostgreSQL databáze běží a vytvořte v ní databázi s názvem `hamster_reservations` (nebo jiným, pokud jste jej změnili v `.env`).
+4. **Příprava databáze na cloudu:**
+   Veškerá data jsou **uložena na cloudu v Supabase PostgreSQL** (nikoliv lokálně). Do webového rozhraní Supabase nemusíte ručně naklikávat žádné tabulky ani spouštět SQL skripty — aplikace při svém prvním spuštění sama odešle do Supabase inicializační příkazy, které v cloudové databázi vytvoří potřebné tabulky (`hamsters`, `reservations`, `notifications_outbox`) a vloží výchozí křečky do katalogu.
 
-## Spuštění projektu
+## Spuštění a ovládání projektu
 
-### Vývojový režim (Development)
-Pro lokální vývoj s automatickým restartem serveru při změnách v kódu použijte:
-```bash
-npm run dev
-```
+### NPM Skripty
 
-### Produkční režim
-Pro produkci je nejdříve potřeba kód zkompilovat z TypeScriptu do JavaScriptu a poté spustit:
-```bash
-npm run build
-npm start
-```
-Server standardně poběží na adrese `http://localhost:3000`.
+Všechny klíčové příkazy jsou definovány v `package.json`:
+
+| Příkaz | Význam |
+|---|---|
+| `npm run dev` | **Vývojový server** s automatickým sledováním změn a restartem (`tsx watch`). |
+| `npm run build` | **Kompilace** TypeScriptu do složky `dist/` pomocí `tsc`. |
+| `npm start` | **Produkční start** zkompilovaného serveru z `dist/index.js`. |
+| `npm run spike` | **Engineering Spike (C01)** — rychlé ověření spojení s PostgreSQL a zápisu/čtení testovací rezervace. |
+
+Server standardně naslouchá na portu definovaném v `.env` (výchozí: `http://localhost:3000`).
+
+---
+
+## Webové uživatelské rozhraní (Frontend)
+
+Po spuštění serveru otevřete v prohlížeči:
+👉 **`http://localhost:3000`**
+
+Aplikace nabízí dva plně funkční režimy přepínatelné v horní liště:
+1. **🎓 Studentský pohled:**
+   - Prohlížení katalogu křečků s jejich povahou a stavem.
+   - **Týdenní harmonogram obsazenosti:** Zobrazení obsazených a volných časových slotů vybraného křečka s plynulým scrollováním při více rezervacích v jednom dni.
+   - **Rezervační panel:** Výběr data a času s rychlými čipy, živá kontrola dostupnosti a vizuální ukazatel čerpání denního limitu (max. 30 minut denně).
+   - Možnost dvoufázové rezervace: uložení jako `DRAFT` (návrh) nebo okamžité odeslání k potvrzení.
+   - **Moje rezervace:** Přehled sjednaných termínů, potvrzení rozpracovaných návrhů a storno (s respektováním pravidla 15 minut předem a šetrným modálním dialogem).
+2. **🧑‍🏫 Kabinet správce:**
+   - Schvalovací fronta pro křečky vyžadující dohled (např. *Archimedes*).
+   - Tlačítka pro schválení (`APPROVE`) nebo zamítnutí (`REJECT`) žádostí.
+   - Ruční spuštění kontroly expirace nerozhodnutých žádostí (`OP-06`).
+   - Přehled všech rezervací v celém systému napříč studenty.
+
+---
+
+## Přehled REST API endpointů
+
+Pokud preferujete ovládání přes HTTP klienta (cURL, Postman, REST Client):
+
+| Metoda | Endpoint | Operace / Význam | Parametry / Tělo požadavku |
+|---|---|---|---|
+| `GET` | `/api/hamsters` | Seznam křečků v katalogu | — |
+| `GET` | `/api/reservations/availability` | **OP-02:** Ověření dostupnosti termínu | Query: `hamster_id`, `start_time`, `end_time` |
+| `POST` | `/api/reservations` | **OP-01:** Vytvoření rezervace ve stavu `DRAFT` | Body: `{ user_id, hamster_id, start_time, end_time }` |
+| `GET` | `/api/reservations` | Seznam existujících rezervací | Query: `user_id` (volitelné), `status` (volitelné) |
+| `GET` | `/api/reservations/:id` | Detail konkrétní rezervace | URL: `:id` rezervace |
+| `POST` | `/api/reservations/:id/confirm` | **OP-03:** Potvrzení rezervace (`CONFIRMED` / `PENDING_APPROVAL`) | Body: `{ user_id }` |
+| `POST` | `/api/reservations/:id/cancel` | **OP-04:** Zrušení rezervace (nejpozději 15 min předem) | Body: `{ user_id }` |
+| `POST` | `/api/reservations/:id/decide` | **OP-05:** Schválení / zamítnutí správcem | Header: `x-user-role: MANAGER` nebo `spravce`<br>Body: `{ decision: "APPROVE" \| "REJECT" }` |
+| `POST` | `/api/reservations/expire` | **OP-06:** Spuštění časovače expirací | — |
+
+> **Tip pro testování časových hranic:** Všechny endpointy podporují volitelnou HTTP hlavičku `x-current-time` (ve formátu ISO 8601, např. `2027-10-01T13:40:00Z`), což umožňuje deterministické testování pravidel jako je předstih 15 minut před začátkem rezervace.
+
+---
 
 ## CP1 walking skeleton
 

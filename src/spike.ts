@@ -27,7 +27,7 @@ async function runSpike() {
     `;
     const reservation = {
       user_id: 'student_123',
-      hamster_id: 'hamster_ferda',
+      hamster_id: 'ferda',
       start_time: new Date('2027-10-01T10:00:00Z'),
       end_time: new Date('2027-10-01T10:30:00Z'),
       status: 'CONFIRMED',
@@ -48,7 +48,7 @@ async function runSpike() {
 
     // 3. Načtení uložené rezervace
     console.log('3. Načítám uloženou rezervaci zpět...');
-    const selectQuery = 'SELECT * FROM reservations WHERE id = $1';
+    const selectQuery = 'SELECT id, user_id, hamster_id, start_time, end_time, status FROM reservations WHERE id = $1';
     const selectResult = await pool.query(selectQuery, [newReservationId]);
     const loadedReservation = selectResult.rows[0];
     

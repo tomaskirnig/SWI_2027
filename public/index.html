@@ -1,0 +1,2586 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Křečkomat — Univerzitní antistresové rezervace školních křečků</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* Warm Minimalist Palette */
+      --bg-canvas: #FAF8F5;
+      --bg-card: #FFFFFF;
+      --bg-card-subtle: #F6F3EE;
+      --bg-card-accent: #FCFAF7;
+      
+      --border-subtle: #EBE5DB;
+      --border-strong: #DDD5C7;
+      
+      --text-main: #23272A;
+      --text-secondary: #5F6670;
+      --text-muted: #8A929E;
+      
+      /* Editorial Accents */
+      --terracotta: #D96B27;
+      --terracotta-hover: #C25B1B;
+      --terracotta-soft: #FDF3EB;
+      
+      --sage: #337357;
+      --sage-soft: #EDF7F2;
+      
+      --amber: #B45309;
+      --amber-soft: #FEF3C7;
+      
+      --lavender: #6D597A;
+      --lavender-soft: #F4EFF7;
+      
+      --rose: #B91C1C;
+      --rose-soft: #FEE2E2;
+
+      /* Shapes & Elevation */
+      --radius-xs: 6px;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --radius-full: 9999px;
+      
+      --shadow-subtle: 0 1px 3px rgba(35, 39, 42, 0.04), 0 4px 14px rgba(35, 39, 42, 0.02);
+      --shadow-hover: 0 4px 12px rgba(35, 39, 42, 0.06), 0 12px 28px rgba(35, 39, 42, 0.04);
+      --shadow-modal: 0 16px 48px rgba(35, 39, 42, 0.12);
+
+      --font-display: 'Newsreader', Georgia, serif;
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      font-size: 15px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Layout Container */
+    .app-shell {
+      max-width: 1060px;
+      margin: 0 auto;
+      padding: 0 24px;
+      width: 100%;
+    }
+
+    /* Top Navigation Bar */
+    header.site-header {
+      background: var(--bg-canvas);
+      border-bottom: 1px solid var(--border-subtle);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      backdrop-filter: blur(8px);
+      background-color: rgba(250, 248, 245, 0.92);
+    }
+
+    .nav-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      height: 72px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .brand-icon {
+      font-size: 26px;
+      width: 44px;
+      height: 44px;
+      background: var(--terracotta-soft);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(217, 107, 39, 0.15);
+    }
+
+    .brand-title {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 500;
+      letter-spacing: -0.3px;
+      color: var(--text-main);
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .brand-tag {
+      font-family: var(--font-sans);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--terracotta);
+      background: var(--terracotta-soft);
+      padding: 2px 7px;
+      border-radius: var(--radius-full);
+    }
+
+    .nav-controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    /* Identity selector */
+    .user-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .user-pill select {
+      border: none;
+      background: transparent;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* Segmented Mode Switcher */
+    .mode-switch {
+      display: inline-flex;
+      background: var(--bg-card-subtle);
+      padding: 3px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .mode-btn {
+      border: none;
+      background: transparent;
+      padding: 7px 16px;
+      border-radius: var(--radius-xs);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .mode-btn:hover {
+      color: var(--text-main);
+    }
+
+    .mode-btn.active {
+      background: var(--bg-card);
+      color: var(--text-main);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      padding: 40px 0 60px;
+    }
+
+    /* Hero Section */
+    .hero {
+      margin-bottom: 40px;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--sage);
+      background: var(--sage-soft);
+      padding: 4px 12px;
+      border-radius: var(--radius-full);
+      margin-bottom: 14px;
+    }
+
+    .hero-title {
+      font-family: var(--font-display);
+      font-size: 38px;
+      line-height: 1.2;
+      font-weight: 400;
+      color: var(--text-main);
+      margin-bottom: 12px;
+      letter-spacing: -0.5px;
+    }
+
+    .hero-subtitle {
+      font-size: 16px;
+      color: var(--text-secondary);
+      max-width: 660px;
+      line-height: 1.6;
+    }
+
+    .rules-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .rule-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .rule-item strong {
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    /* Hamsters Section */
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 20px;
+    }
+
+    .section-title {
+      font-family: var(--font-display);
+      font-size: 24px;
+      font-weight: 500;
+      color: var(--text-main);
+    }
+
+    .section-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* Hamster Cards Grid */
+    .hamster-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+      gap: 20px;
+      margin-bottom: 48px;
+    }
+
+    .hamster-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: var(--shadow-subtle);
+      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+      position: relative;
+    }
+
+    .hamster-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-hover);
+      border-color: var(--border-strong);
+    }
+
+    .hamster-card.inactive {
+      opacity: 0.72;
+      background: var(--bg-card-subtle);
+    }
+
+    .hamster-top {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .hamster-avatar-box {
+      font-size: 30px;
+      width: 56px;
+      height: 56px;
+      background: var(--bg-card-subtle);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .hamster-identity {
+      flex: 1;
+    }
+
+    .hamster-name {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--text-main);
+      margin-bottom: 2px;
+    }
+
+    .hamster-role {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .hamster-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    /* Badges & Tags */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: var(--radius-full);
+      letter-spacing: 0.2px;
+    }
+
+    .badge-sage {
+      background: var(--sage-soft);
+      color: var(--sage);
+    }
+
+    .badge-terracotta {
+      background: var(--terracotta-soft);
+      color: var(--terracotta);
+    }
+
+    .badge-lavender {
+      background: var(--lavender-soft);
+      color: var(--lavender);
+    }
+
+    .badge-amber {
+      background: var(--amber-soft);
+      color: var(--amber);
+    }
+
+    .badge-muted {
+      background: #EEEBE3;
+      color: var(--text-secondary);
+    }
+
+    .hamster-story {
+      font-size: 13.5px;
+      color: var(--text-secondary);
+      line-height: 1.55;
+      margin-bottom: 20px;
+    }
+
+    .hamster-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 16px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .hamster-availability-text {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--sage);
+    }
+
+    .dot.dot-inactive {
+      background: var(--text-muted);
+    }
+
+    .dot.dot-amber {
+      background: var(--amber);
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-family: var(--font-sans);
+      font-size: 13.5px;
+      font-weight: 600;
+      padding: 9px 18px;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--terracotta);
+      color: #FFFFFF;
+      box-shadow: 0 1px 4px rgba(217, 107, 39, 0.25);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--terracotta-hover);
+    }
+
+    .btn-outline {
+      background: var(--bg-card);
+      border-color: var(--border-strong);
+      color: var(--text-main);
+    }
+
+    .btn-outline:hover:not(:disabled) {
+      background: var(--bg-card-subtle);
+      border-color: var(--text-secondary);
+    }
+
+    .btn-subtle {
+      background: transparent;
+      color: var(--text-secondary);
+    }
+
+    .btn-subtle:hover:not(:disabled) {
+      background: var(--bg-card-subtle);
+      color: var(--text-main);
+    }
+
+    .btn-sage {
+      background: var(--sage);
+      color: #FFFFFF;
+    }
+
+    .btn-sage:hover:not(:disabled) {
+      background: #285A43;
+    }
+
+    .btn-sm {
+      padding: 5px 12px;
+      font-size: 12px;
+    }
+
+    .btn-danger-subtle {
+      color: var(--rose);
+      background: transparent;
+    }
+
+    .btn-danger-subtle:hover {
+      background: var(--rose-soft);
+    }
+
+    /* Quick Reservation Panel (Booking Drawer) */
+    .booking-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      box-shadow: var(--shadow-subtle);
+      margin-bottom: 48px;
+    }
+
+    .booking-header {
+      margin-bottom: 24px;
+    }
+
+    .booking-title {
+      font-family: var(--font-display);
+      font-size: 26px;
+      font-weight: 500;
+      color: var(--text-main);
+      margin-bottom: 4px;
+    }
+
+    .booking-intro {
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .form-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .form-input, .form-select {
+      background: var(--bg-card);
+      border: 1px solid var(--border-strong);
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 14px;
+      color: var(--text-main);
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .form-input:focus, .form-select:focus {
+      border-color: var(--terracotta);
+      box-shadow: 0 0 0 3px rgba(217, 107, 39, 0.12);
+    }
+
+    .form-input:disabled {
+      background: var(--bg-card-subtle);
+      cursor: not-allowed;
+    }
+
+    /* Chips Selector for Date & Times */
+    .chip-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .chip {
+      background: var(--bg-card-subtle);
+      border: 1px solid var(--border-subtle);
+      padding: 5px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.12s ease;
+    }
+
+    .chip:hover {
+      border-color: var(--border-strong);
+      color: var(--text-main);
+    }
+
+    .chip.active {
+      background: var(--terracotta-soft);
+      border-color: rgba(217, 107, 39, 0.4);
+      color: var(--terracotta);
+    }
+
+    /* Live Availability & Limit Indicator */
+    .availability-meter-card {
+      background: var(--bg-card-accent);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .limit-progress-wrapper {
+      flex: 1;
+      min-width: 240px;
+    }
+
+    .limit-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .limit-label-title {
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .limit-meter-bar {
+      height: 7px;
+      background: #EAE4DA;
+      border-radius: var(--radius-full);
+      overflow: hidden;
+    }
+
+    .limit-meter-fill {
+      height: 100%;
+      background: var(--sage);
+      width: 0%;
+      border-radius: var(--radius-full);
+      transition: width 0.3s ease, background-color 0.3s ease;
+    }
+
+    .limit-meter-fill.near-limit {
+      background: var(--amber);
+    }
+
+    .limit-meter-fill.exceeded {
+      background: var(--rose);
+    }
+
+    .live-slot-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    /* Action bar */
+    .booking-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .booking-actions-left {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .lead-time-notice {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Calendar Schedule Section inside Booking Card */
+    .calendar-schedule-card {
+      margin-top: 32px;
+      padding-top: 26px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .calendar-topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .calendar-title-group h3 {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 2px;
+    }
+
+    .calendar-title-group p {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .calendar-nav-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .calendar-week-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .day-column {
+      background: var(--bg-card-subtle);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 10px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      height: 220px;
+      transition: all 0.15s ease;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .day-column:hover {
+      border-color: var(--border-strong);
+      background: #F4EFE7;
+    }
+
+    .day-column.active-day {
+      border-color: var(--terracotta);
+      background: var(--bg-card-accent);
+      box-shadow: 0 0 0 1px var(--terracotta);
+    }
+
+    .day-column.is-today {
+      background: #FAF3EB;
+    }
+
+    .day-header {
+      border-bottom: 1px solid rgba(220, 212, 200, 0.6);
+      padding-bottom: 6px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .day-header-meta {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .day-name {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+    }
+
+    .day-count-badge {
+      font-size: 10px;
+      font-weight: 700;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      padding: 0 4px;
+      border-radius: var(--radius-full);
+      line-height: 1.4;
+    }
+
+    .day-number {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-top: 1px;
+    }
+
+    .day-today-tag {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--terracotta);
+      background: var(--terracotta-soft);
+      padding: 1px 5px;
+      border-radius: var(--radius-xs);
+      margin-top: 2px;
+    }
+
+    .day-events-list {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      flex: 1;
+      max-height: 135px;
+      overflow-y: auto;
+      padding-right: 3px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-strong) transparent;
+    }
+
+    .day-events-list::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .day-events-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .day-events-list::-webkit-scrollbar-thumb {
+      background: var(--border-strong);
+      border-radius: 4px;
+    }
+
+    .day-events-list::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
+    }
+
+    .cal-event-pill {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 5px 6px;
+      border-radius: var(--radius-xs);
+      line-height: 1.3;
+      border-left: 3px solid transparent;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .cal-event-pill.status-CONFIRMED {
+      background: #FDF1E8;
+      color: #9C4511;
+    }
+
+    .cal-event-pill.status-PENDING_APPROVAL {
+      background: var(--lavender-soft);
+      color: var(--lavender);
+      border-left-color: var(--lavender);
+    }
+
+    .cal-event-pill.status-DRAFT {
+      background: var(--amber-soft);
+      color: var(--amber);
+      border-left-color: var(--amber);
+    }
+
+    .cal-day-free-label {
+      font-size: 11px;
+      color: var(--sage);
+      text-align: center;
+      margin: auto 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      opacity: 0.85;
+    }
+
+    .calendar-legend-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      padding: 10px 14px;
+      background: var(--bg-card-subtle);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .legend-items {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .legend-color {
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+    }
+
+    @media (max-width: 860px) {
+      .calendar-week-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 520px) {
+      .calendar-week-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Reservations List Section */
+    .reservations-section {
+      margin-bottom: 50px;
+    }
+
+    .tabs-subnav {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid var(--border-subtle);
+      margin-bottom: 24px;
+    }
+
+    .tab-link {
+      padding: 8px 14px;
+      border-bottom: 2px solid transparent;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      background: transparent;
+      border-top: none;
+      border-left: none;
+      border-right: none;
+      cursor: pointer;
+      margin-bottom: -1px;
+      transition: all 0.15s ease;
+    }
+
+    .tab-link:hover {
+      color: var(--text-main);
+    }
+
+    .tab-link.active {
+      color: var(--terracotta);
+      border-bottom-color: var(--terracotta);
+    }
+
+    /* Reservation Cards */
+    .reservation-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .res-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 18px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      box-shadow: var(--shadow-subtle);
+      transition: border-color 0.15s ease;
+    }
+
+    .res-card:hover {
+      border-color: var(--border-strong);
+    }
+
+    .res-card-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 280px;
+    }
+
+    .res-hamster-icon {
+      font-size: 24px;
+      width: 48px;
+      height: 48px;
+      background: var(--bg-card-subtle);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .res-info-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 3px;
+    }
+
+    .res-info-meta {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .res-info-note {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .res-card-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    /* Admin View Styles */
+    .admin-container {
+      display: none;
+    }
+
+    .admin-container.active {
+      display: block;
+    }
+
+    .student-container {
+      display: block;
+    }
+
+    .student-container.hidden {
+      display: none;
+    }
+
+    .admin-banner-card {
+      background: #F5EFEB;
+      border: 1px solid #E6D8CE;
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .admin-banner-text h3 {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--text-main);
+      margin-bottom: 4px;
+    }
+
+    .admin-banner-text p {
+      font-size: 13.5px;
+      color: var(--text-secondary);
+    }
+
+    /* Toast Notification */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: 420px;
+      width: calc(100% - 48px);
+      pointer-events: none;
+    }
+
+    .toast {
+      background: var(--text-main);
+      color: #FFFFFF;
+      padding: 13px 18px;
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-modal);
+      font-size: 13.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      pointer-events: auto;
+      animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .toast.toast-success {
+      background: #193327;
+    }
+
+    .toast.toast-error {
+      background: #3B1B1C;
+    }
+
+    .toast.toast-info {
+      background: #23272A;
+    }
+
+    /* Modal Component */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(35, 39, 42, 0.45);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      animation: fadeIn 0.15s ease;
+    }
+
+    .modal-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-modal);
+      max-width: 440px;
+      width: 100%;
+      padding: 26px;
+      animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes modalPop {
+      from { transform: scale(0.96) translateY(6px); opacity: 0; }
+      to { transform: scale(1) translateY(0); opacity: 1; }
+    }
+
+    .modal-icon-row {
+      font-size: 26px;
+      margin-bottom: 14px;
+      width: 50px;
+      height: 50px;
+      background: var(--bg-card-subtle);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .modal-title {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--text-main);
+      margin-bottom: 8px;
+    }
+
+    .modal-body {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(12px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    /* Empty states */
+    .empty-state {
+      text-align: center;
+      padding: 48px 20px;
+      background: var(--bg-card);
+      border: 1px dashed var(--border-strong);
+      border-radius: var(--radius-md);
+    }
+
+    .empty-state-icon {
+      font-size: 32px;
+      margin-bottom: 12px;
+      opacity: 0.8;
+    }
+
+    .empty-state-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 4px;
+    }
+
+    .empty-state-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      max-width: 400px;
+      margin: 0 auto;
+    }
+
+    /* Footer */
+    footer.site-footer {
+      border-top: 1px solid var(--border-subtle);
+      padding: 32px 0;
+      margin-top: auto;
+      background: var(--bg-canvas);
+    }
+
+    .footer-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      font-size: 12.5px;
+      color: var(--text-muted);
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 16px;
+    }
+
+    .footer-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+    }
+
+    .footer-links a:hover {
+      color: var(--terracotta);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .nav-container {
+        height: auto;
+        padding: 16px 0;
+        flex-direction: column;
+        gap: 14px;
+        align-items: stretch;
+      }
+      .nav-controls {
+        justify-content: space-between;
+      }
+      .hero-title {
+        font-size: 30px;
+      }
+      .booking-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .booking-actions-left {
+        width: 100%;
+      }
+      .booking-actions-left .btn {
+        flex: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Site Navigation -->
+  <header class="site-header">
+    <div class="app-shell nav-container">
+      <a href="#" class="brand" onclick="window.location.reload(); return false;">
+        <div class="brand-icon">🐹</div>
+        <div class="brand-title">
+          Křečkomat
+          <span class="brand-tag">Univerzita</span>
+        </div>
+      </a>
+
+      <div class="nav-controls">
+        <!-- Student profile switcher -->
+        <div class="user-pill" title="Aktivní student">
+          <span>👤 Student:</span>
+          <select id="userSelector" onchange="onUserChange()">
+            <option value="student_tomas">Tomáš (student_tomas)</option>
+            <option value="student_jana">Jana (student_jana)</option>
+            <option value="student_adam">Adam (student_adam)</option>
+          </select>
+        </div>
+
+        <!-- Role Switcher -->
+        <div class="mode-switch">
+          <button class="mode-btn active" id="btnStudentMode" onclick="setAppMode('student')">
+            🎓 Student
+          </button>
+          <button class="mode-btn" id="btnAdminMode" onclick="setAppMode('admin')">
+            🧑‍🏫 Kabinet správce
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main>
+    <div class="app-shell">
+
+      <!-- ======================================================== -->
+      <!-- STUDENT VIEW                                             -->
+      <!-- ======================================================== -->
+      <div id="studentContainer" class="student-container">
+        
+        <!-- Hero Introduction -->
+        <section class="hero">
+          <div class="hero-eyebrow">
+            <span>🌿</span> Antistresový program pro studenty
+          </div>
+          <h1 class="hero-title">Chvilka klidu s měkkým kožíškem.</h1>
+          <p class="hero-subtitle">
+            Krátké antistresové pauzy mezi přednáškami a zkouškami. Rezervujte si čas se školním křečkem 
+            a načerpejte klidnou energii v tichém zázemí biologického kabinetu.
+          </p>
+
+          <div class="rules-strip">
+            <div class="rule-item">
+              <span>⏱️</span>
+              <span>Denní limit: <strong>max. 30 minut</strong> na křečka</span>
+            </div>
+            <div class="rule-item">
+              <span>⏳</span>
+              <span>Předstih: <strong>alespoň 15 minut</strong> předem</span>
+            </div>
+            <div class="rule-item">
+              <span>🌻</span>
+              <span>Dvoufázově: <strong>Návrh</strong> &rarr; <strong>Potvrzení</strong></span>
+            </div>
+            <div class="rule-item">
+              <span>🎓</span>
+              <span>Učení křečci: <strong>Dozor správce</strong></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Hamsters Catalog -->
+        <section>
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">Naši školní křečci</h2>
+              <p class="section-desc">Vyberte si parťáka pro dnešní nebo zítřejší relaxaci.</p>
+            </div>
+          </div>
+
+          <div class="hamster-grid" id="hamstersGrid">
+            <!-- Dynamically populated from /api/hamsters -->
+            <div class="empty-state" style="grid-column: 1/-1;">
+              <div class="empty-state-icon">🐹</div>
+              <div class="empty-state-title">Načítám křečky...</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Interactive Booking Drawer / Form -->
+        <section class="booking-card" id="bookingSection">
+          <div class="booking-header">
+            <h2 class="booking-title" id="bookingTitle">Zamluvit si čas</h2>
+            <p class="booking-intro" id="bookingIntro">
+              Zvolte si datum, čas a délku návštěvy. Vytvořením vznikne návrh (DRAFT), který můžete ihned potvrdit.
+            </p>
+          </div>
+
+          <form id="reservationForm" onsubmit="handleCreateReservation(event)">
+            <div class="form-grid">
+              
+              <!-- Hamster Select -->
+              <div class="form-group">
+                <label class="form-label" for="bookHamster">Křeček</label>
+                <select id="bookHamster" class="form-select" onchange="onHamsterSelectChange()"></select>
+              </div>
+
+              <!-- Date Picker & Chips -->
+              <div class="form-group">
+                <label class="form-label" for="bookDate">Datum</label>
+                <input type="date" id="bookDate" class="form-input" required onchange="onFormParamChange()">
+                <div class="chip-group">
+                  <span class="chip active" onclick="setQuickDate(0, this)">Dnes</span>
+                  <span class="chip" onclick="setQuickDate(1, this)">Zítra</span>
+                  <span class="chip" onclick="setQuickDate(2, this)">Pozítří</span>
+                </div>
+              </div>
+
+              <!-- Time Picker & Chips -->
+              <div class="form-group">
+                <label class="form-label" for="bookTime">Čas začátku</label>
+                <input type="time" id="bookTime" class="form-input" required value="14:00" onchange="onFormParamChange()">
+                <div class="chip-group">
+                  <span class="chip" onclick="setQuickTime('10:00', this)">10:00</span>
+                  <span class="chip" onclick="setQuickTime('12:00', this)">12:00</span>
+                  <span class="chip active" onclick="setQuickTime('14:00', this)">14:00</span>
+                  <span class="chip" onclick="setQuickTime('16:00', this)">16:00</span>
+                </div>
+              </div>
+
+              <!-- Duration Selector -->
+              <div class="form-group">
+                <label class="form-label" for="bookDuration">Délka návštěvy</label>
+                <select id="bookDuration" class="form-select" onchange="onFormParamChange()">
+                  <option value="15">15 minut (rychlé pohlazení)</option>
+                  <option value="30" selected>30 minut (denní maximum)</option>
+                </select>
+                <span style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                  Maximální limit na den a křečka je 30 min.
+                </span>
+              </div>
+
+            </div>
+
+            <!-- Live Daily Limit & Real-time Availability Widget -->
+            <div class="availability-meter-card">
+              <div class="limit-progress-wrapper">
+                <div class="limit-label-row">
+                  <span class="limit-label-title" id="meterLabel">Denní limit pro zvolený den</span>
+                  <span id="meterText" style="font-weight: 700; color: var(--text-main);">0 / 30 min</span>
+                </div>
+                <div class="limit-meter-bar">
+                  <div class="limit-meter-fill" id="meterFill" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <div class="live-slot-status" id="liveSlotStatus">
+                <span class="dot"></span>
+                <span>Ověřuji termín...</span>
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="booking-actions">
+              <div class="lead-time-notice">
+                <span>⏱️</span>
+                <span>Termín musí začínat nejpozději 15 minut od nynějška.</span>
+              </div>
+
+              <div class="booking-actions-left">
+                <button type="button" class="btn btn-outline" onclick="submitReservation('DRAFT')">
+                  📝 Uložit pouze jako návrh
+                </button>
+                <button type="submit" class="btn btn-primary" id="btnConfirmInstant">
+                  ✨ Vytvořit a ihned potvrdit
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <!-- Calendar Schedule Display (purely for displaying reservations & slot availability) -->
+          <div class="calendar-schedule-card">
+            <div class="calendar-topbar">
+              <div class="calendar-title-group">
+                <h3>
+                  <span>📅</span>
+                  <span>Týdenní harmonogram obsazenosti</span>
+                </h3>
+                <p id="calendarSubtitle">
+                  Přehled obsazenosti pro zvoleného křečka. Kliknutím na den jej nastavíte do formuláře výše.
+                </p>
+              </div>
+
+              <div class="calendar-nav-group">
+                <button type="button" class="btn btn-outline btn-sm" onclick="navigateCalendarWeek(-1)">
+                  ‹ Předchozí
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" onclick="navigateCalendarWeek(0)">
+                  Dnes
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" onclick="navigateCalendarWeek(1)">
+                  Další ›
+                </button>
+              </div>
+            </div>
+
+            <!-- 7-day grid -->
+            <div class="calendar-week-grid" id="calendarWeekGrid">
+              <!-- Dynamically rendered -->
+            </div>
+
+            <!-- Legend bar -->
+            <div class="calendar-legend-bar">
+              <div class="legend-items">
+                <div class="legend-item">
+                  <span class="legend-color" style="background: var(--terracotta);"></span>
+                  <span>Potvrzeno (obsazeno)</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-color" style="background: var(--lavender);"></span>
+                  <span>Čeká na schválení</span>
+                </div>
+                <div class="legend-item">
+                  <span class="legend-color" style="background: var(--sage);"></span>
+                  <span>Volno</span>
+                </div>
+              </div>
+              <div style="font-size: 11.5px; color: var(--text-muted);">
+                💡 Kliknutím na den v kalendáři se datum automaticky předvyplní do formuláře.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Student's Existing Reservations -->
+        <section class="reservations-section">
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">Moje rezervace</h2>
+              <p class="section-desc">Přehled vašich sjednaných termínů a rozpracovaných návrhů.</p>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="loadMyReservations()">
+              🔄 Obnovit
+            </button>
+          </div>
+
+          <!-- Filter Subnav -->
+          <div class="tabs-subnav">
+            <button class="tab-link active" onclick="filterReservations('ALL', this)">Všechny (<span id="countAll">0</span>)</button>
+            <button class="tab-link" onclick="filterReservations('CONFIRMED', this)">Potvrzené (<span id="countConfirmed">0</span>)</button>
+            <button class="tab-link" onclick="filterReservations('PENDING_APPROVAL', this)">Čeká na schválení (<span id="countPending">0</span>)</button>
+            <button class="tab-link" onclick="filterReservations('DRAFT', this)">Návrhy (<span id="countDraft">0</span>)</button>
+          </div>
+
+          <div class="reservation-list" id="myReservationsList">
+            <div class="empty-state">
+              <div class="empty-state-icon">📋</div>
+              <div class="empty-state-title">Zatím nemáte žádné rezervace</div>
+              <div class="empty-state-desc">Vyberte si křečka výše a naplánujte si své první antistresové pohlazení.</div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+
+      <!-- ======================================================== -->
+      <!-- ADMIN VIEW (Kabinet správce)                             -->
+      <!-- ======================================================== -->
+      <div id="adminContainer" class="admin-container">
+        
+        <div class="admin-banner-card">
+          <div class="admin-banner-text">
+            <h3>🧑‍🏫 Kabinet správce křečků</h3>
+            <p>
+              Správa žádostí vyžadujících dohled kustoda (např. křeček Archimedes) a údržba termínů.
+            </p>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="triggerExpire()">
+            ⏱️ Spustit kontrolu expirací (OP-06)
+          </button>
+        </div>
+
+        <!-- Pending Approval Queue -->
+        <section style="margin-bottom: 40px;">
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">Žádosti čekající na schválení</h2>
+              <p class="section-desc">Studenti čekají na vaše posouzení. Schválením dojde k alokaci křečka.</p>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="loadAdminRequests()">
+              🔄 Obnovit frontu
+            </button>
+          </div>
+
+          <div class="reservation-list" id="adminPendingList">
+            <div class="empty-state">
+              <div class="empty-state-icon">✨</div>
+              <div class="empty-state-title">Žádné žádosti nečekají na schválení</div>
+              <div class="empty-state-desc">Všechny požadavky na speciální křečky jsou vyřízeny.</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- All Reservations Log for Administrator -->
+        <section>
+          <div class="section-header">
+            <div>
+              <h2 class="section-title">Celkový přehled všech rezervací v systému</h2>
+              <p class="section-desc">Kompletní historie pro kontrolu vytížení křečků.</p>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="loadAllSystemReservations()">
+              🔄 Obnovit přehled
+            </button>
+          </div>
+
+          <div class="reservation-list" id="allReservationsList">
+            <div class="empty-state">
+              <div class="empty-state-icon">📚</div>
+              <div class="empty-state-title">Načítám kompletní registr...</div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Site Footer -->
+  <footer class="site-footer">
+    <div class="app-shell footer-content">
+      <div>
+        <strong>Křečkomat</strong> &bull; Univerzitní projekt SWI 2026/2027 &bull; Biologický kabinet č. 204
+      </div>
+      <div class="footer-links">
+        <a href="javascript:void(0)" onclick="showToast('info', 'Systém běží na Supabase PostgreSQL s bezpečnými transakčními zámky.')">PostgreSQL Status</a>
+        <a href="javascript:void(0)" onclick="showToast('info', 'Denní limit 30 min je počítán pro každého studenta a křečka samostatně.')">Pravidla limitů</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Modal Dialog Component (replaces default alert/confirm) -->
+  <div class="modal-backdrop" id="modalBackdrop" style="display: none;" onclick="onModalBackdropClick(event)">
+    <div class="modal-card" id="modalCard">
+      <div class="modal-icon-row" id="modalIcon">🌿</div>
+      <h3 class="modal-title" id="modalTitle">Potvrzení</h3>
+      <p class="modal-body" id="modalMessage">Zpráva...</p>
+      <div class="modal-actions" id="modalActions">
+        <button type="button" class="btn btn-outline" id="modalCancelBtn" onclick="closeModal(false)">Zrušit</button>
+        <button type="button" class="btn btn-primary" id="modalConfirmBtn" onclick="closeModal(true)">Potvrdit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- SCRIPT LOGIC -->
+  <script>
+    // State
+    let currentMode = 'student'; // 'student' | 'admin'
+    let currentUserId = 'student_tomas';
+    let hamsters = [];
+    let selectedHamsterId = 'ferda';
+    let myReservations = [];
+    let activeFilter = 'ALL';
+    let calendarWeekOffset = 0;
+    let allReservationsCache = [];
+
+    // Personality descriptions and avatars
+    const HAMSTER_META = {
+      ferda: {
+        avatar: '🐹',
+        role: 'Křeček zlatý • Klidný mazel',
+        story: 'Mimořádně přátelský a trpělivý křeček. Rád se nechá hladit a miluje chroupání slunečnicových semínek. Ideální volba po náročné zkoušce.',
+        directApproval: true
+      },
+      archimedes: {
+        avatar: '🎓',
+        role: 'Džungarský křeček • Noční filozof',
+        story: 'Učený a zvídavý křeček. Pro své delikátní návyky vyžaduje rezervace schválení správcem kabinetu (pan učitel).',
+        directApproval: false
+      },
+      spavek: {
+        avatar: '💤',
+        role: 'Roborovského křeček • Zimní spáč',
+        story: 'Momentálně má dlouhý spánkový režim a regeneruje síly. Rezervace nejsou v tomto semestru povoleny.',
+        directApproval: false
+      }
+    };
+
+    // Initialize application
+    window.addEventListener('DOMContentLoaded', () => {
+      initDateInputs();
+      loadHamsters();
+      loadMyReservations();
+      loadCalendarReservations();
+    });
+
+    function initDateInputs() {
+      const now = new Date();
+      // default: tomorrow at 14:00
+      const tomorrow = new Date(now);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const yyyy = tomorrow.getFullYear();
+      const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
+      const dd = String(tomorrow.getDate()).padStart(2, '0');
+      
+      document.getElementById('bookDate').value = `${yyyy}-${mm}-${dd}`;
+      document.getElementById('bookDate').min = new Date().toISOString().split('T')[0];
+    }
+
+    // Role / Mode Switcher
+    function setAppMode(mode) {
+      currentMode = mode;
+      document.getElementById('btnStudentMode').classList.toggle('active', mode === 'student');
+      document.getElementById('btnAdminMode').classList.toggle('active', mode === 'admin');
+
+      const studentContainer = document.getElementById('studentContainer');
+      const adminContainer = document.getElementById('adminContainer');
+
+      if (mode === 'student') {
+        studentContainer.classList.remove('hidden');
+        adminContainer.classList.remove('active');
+        loadMyReservations();
+      } else {
+        studentContainer.classList.add('hidden');
+        adminContainer.classList.add('active');
+        loadAdminRequests();
+        loadAllSystemReservations();
+      }
+    }
+
+    // User Profile Switcher
+    function onUserChange() {
+      const select = document.getElementById('userSelector');
+      currentUserId = select.value;
+      showToast('info', `Aktivní student přepnut na: ${currentUserId}`);
+      loadMyReservations();
+      updateAvailabilityAndMeter();
+    }
+
+    // Load Hamsters from API
+    async function loadHamsters() {
+      try {
+        const res = await fetch('/api/hamsters');
+        if (!res.ok) throw new Error('Nepodařilo se načíst křečky');
+        hamsters = await res.json();
+        renderHamstersGrid();
+        renderHamsterSelect();
+        updateAvailabilityAndMeter();
+      } catch (err) {
+        showToast('error', 'Chyba při stahování seznamu křečků.');
+      }
+    }
+
+    function renderHamstersGrid() {
+      const grid = document.getElementById('hamstersGrid');
+      grid.innerHTML = hamsters.map(h => {
+        const meta = HAMSTER_META[h.id] || {
+          avatar: '🐹',
+          role: 'Školní křeček',
+          story: 'Milý společník.',
+          directApproval: !h.requires_approval
+        };
+
+        const isSelected = h.id === selectedHamsterId;
+        const activeClass = h.is_active ? '' : 'inactive';
+
+        const statusBadge = h.is_active 
+          ? '<span class="badge badge-sage">Aktivní v kabinetu</span>'
+          : '<span class="badge badge-muted">Odpočívá / Neaktivní</span>';
+
+        const approvalBadge = h.requires_approval
+          ? '<span class="badge badge-lavender">Vyžaduje dohled správce</span>'
+          : '<span class="badge badge-terracotta">Přímé potvrzení</span>';
+
+        const bookBtn = h.is_active
+          ? `<button class="btn btn-sm btn-primary" onclick="quickSelectHamster('${h.id}')">Vybrat pro rezervaci</button>`
+          : `<button class="btn btn-sm btn-outline" disabled>Spí (nedostupný)</button>`;
+
+        return `
+          <div class="hamster-card ${activeClass}" style="${isSelected ? 'border-color: var(--terracotta); box-shadow: var(--shadow-hover);' : ''}">
+            <div>
+              <div class="hamster-top">
+                <div class="hamster-avatar-box">${meta.avatar}</div>
+                <div class="hamster-identity">
+                  <h3 class="hamster-name">${h.name}</h3>
+                  <div class="hamster-role">${meta.role}</div>
+                  <div class="hamster-tags">
+                    ${statusBadge}
+                    ${approvalBadge}
+                  </div>
+                </div>
+              </div>
+              <p class="hamster-story">${meta.story}</p>
+            </div>
+
+            <div class="hamster-bottom">
+              <div class="hamster-availability-text">
+                <span class="dot ${h.is_active ? '' : 'dot-inactive'}"></span>
+                <span>${h.is_active ? 'Připraven k mazlení' : 'Mimo provoz'}</span>
+              </div>
+              ${bookBtn}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderHamsterSelect() {
+      const select = document.getElementById('bookHamster');
+      select.innerHTML = hamsters.map(h => {
+        const note = !h.is_active ? ' (neaktivní)' : (h.requires_approval ? ' (vyžaduje schválení)' : '');
+        return `<option value="${h.id}" ${!h.is_active ? 'disabled' : ''}>${h.name}${note}</option>`;
+      }).join('');
+      
+      select.value = selectedHamsterId;
+    }
+
+    function quickSelectHamster(id) {
+      selectedHamsterId = id;
+      renderHamstersGrid();
+      const sel = document.getElementById('bookHamster');
+      if (sel) sel.value = id;
+      
+      const section = document.getElementById('bookingSection');
+      section.scrollIntoView({ behavior: 'smooth' });
+      
+      updateAvailabilityAndMeter();
+      renderCalendarSchedule();
+      showToast('info', `Vybrán křeček ${getHamsterName(id)}.`);
+    }
+
+    function onHamsterSelectChange() {
+      selectedHamsterId = document.getElementById('bookHamster').value;
+      renderHamstersGrid();
+      updateAvailabilityAndMeter();
+      renderCalendarSchedule();
+    }
+
+    function onFormParamChange() {
+      updateAvailabilityAndMeter();
+      renderCalendarSchedule();
+    }
+
+    function setQuickDate(offsetDays, chipElem) {
+      const parent = chipElem.closest('.chip-group');
+      parent.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      chipElem.classList.add('active');
+
+      const d = new Date();
+      d.setDate(d.getDate() + offsetDays);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+
+      document.getElementById('bookDate').value = `${yyyy}-${mm}-${dd}`;
+      updateAvailabilityAndMeter();
+    }
+
+    function setQuickTime(timeStr, chipElem) {
+      const parent = chipElem.closest('.chip-group');
+      parent.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+      chipElem.classList.add('active');
+
+      document.getElementById('bookTime').value = timeStr;
+      updateAvailabilityAndMeter();
+    }
+
+    // Helper to calculate interval
+    function getSelectedInterval() {
+      const dateStr = document.getElementById('bookDate').value;
+      const timeStr = document.getElementById('bookTime').value;
+      const duration = parseInt(document.getElementById('bookDuration').value, 10);
+
+      if (!dateStr || !timeStr) return null;
+
+      const start = new Date(`${dateStr}T${timeStr}:00`);
+      const end = new Date(start.getTime() + duration * 60 * 1000);
+      return { start, end, duration, dateStr };
+    }
+
+    // Real-time Availability & Daily Limit Meter check
+    let availabilityTimeout = null;
+    function updateAvailabilityAndMeter() {
+      clearTimeout(availabilityTimeout);
+      availabilityTimeout = setTimeout(runAvailabilityCheck, 180);
+    }
+
+    async function runAvailabilityCheck() {
+      const interval = getSelectedInterval();
+      const statusBox = document.getElementById('liveSlotStatus');
+      const meterFill = document.getElementById('meterFill');
+      const meterText = document.getElementById('meterText');
+      const meterLabel = document.getElementById('meterLabel');
+      const btnInstant = document.getElementById('btnConfirmInstant');
+
+      if (!interval || isNaN(interval.start.getTime())) {
+        statusBox.innerHTML = `<span class="dot dot-inactive"></span><span>Zadejte platný termín</span>`;
+        return;
+      }
+
+      // 1. Check local 15-minute lead time rule (OP-01 / BR-03)
+      const now = new Date();
+      const fifteenMinBefore = new Date(interval.start.getTime() - 15 * 60 * 1000);
+      if (now.getTime() > fifteenMinBefore.getTime()) {
+        statusBox.innerHTML = `<span class="dot dot-inactive" style="background:var(--rose)"></span><span style="color:var(--rose)">Začátek musí být min. 15 min v budoucnu</span>`;
+        btnInstant.disabled = true;
+        return;
+      }
+
+      // 2. Fetch remote availability
+      try {
+        const url = `/api/reservations/availability?hamster_id=${selectedHamsterId}&start_time=${interval.start.toISOString()}&end_time=${interval.end.toISOString()}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!res.ok) {
+          statusBox.innerHTML = `<span class="dot dot-inactive" style="background:var(--rose)"></span><span style="color:var(--rose)">${data.error || 'Termín nelze ověřit'}</span>`;
+          btnInstant.disabled = true;
+          return;
+        }
+
+        if (data.available) {
+          statusBox.innerHTML = `<span class="dot" style="background:var(--sage)"></span><span style="color:var(--sage)">Termín je volný a připravený</span>`;
+          btnInstant.disabled = false;
+        } else {
+          statusBox.innerHTML = `<span class="dot dot-inactive" style="background:var(--rose)"></span><span style="color:var(--rose)">${translateConflictReason(data.reason)}</span>`;
+          btnInstant.disabled = true;
+        }
+
+        // Calculate student's used minutes on this date for this hamster
+        const confirmedMinutesUsed = calculateUsedMinutesForDay(currentUserId, selectedHamsterId, interval.dateStr);
+        const totalWithCurrent = confirmedMinutesUsed + interval.duration;
+
+        meterLabel.textContent = `Denní limit na ${formatDatePretty(interval.dateStr)}`;
+        meterText.textContent = `${confirmedMinutesUsed} min z 30 min vyčerpáno`;
+
+        const percent = Math.min(100, Math.round((confirmedMinutesUsed / 30) * 100));
+        meterFill.style.width = `${percent}%`;
+        
+        meterFill.className = 'limit-meter-fill';
+        if (totalWithCurrent > 30) {
+          meterFill.classList.add('exceeded');
+          statusBox.innerHTML = `<span class="dot dot-inactive" style="background:var(--rose)"></span><span style="color:var(--rose)">Překročen denní limit 30 min</span>`;
+          btnInstant.disabled = true;
+        } else if (confirmedMinutesUsed >= 15) {
+          meterFill.classList.add('near-limit');
+        }
+
+      } catch (err) {
+        statusBox.innerHTML = `<span class="dot dot-inactive"></span><span>Ověření selhalo</span>`;
+      }
+    }
+
+    function calculateUsedMinutesForDay(userId, hamsterId, dateStr) {
+      if (!myReservations || myReservations.length === 0) return 0;
+      let totalMs = 0;
+      for (const r of myReservations) {
+        if (r.user_id === userId && r.hamster_id === hamsterId && r.status === 'CONFIRMED') {
+          const rDate = r.start_time.split('T')[0];
+          if (rDate === dateStr) {
+            const start = new Date(r.start_time).getTime();
+            const end = new Date(r.end_time).getTime();
+            totalMs += (end - start);
+          }
+        }
+      }
+      return Math.round(totalMs / (60 * 1000));
+    }
+
+    // Human-friendly translations for domain messages
+    function translateConflictReason(reason) {
+      if (!reason) return 'Termín není k dispozici.';
+      if (reason.includes('již rezervován')) {
+        return 'Křeček je v této době již obsazen jiným studentem.';
+      }
+      if (reason.includes('není aktivní')) {
+        return 'Tento křeček nyní odpočívá v zázemí.';
+      }
+      return reason;
+    }
+
+    // CREATE RESERVATION (OP-01 and optional immediate OP-03)
+    async function handleCreateReservation(e) {
+      e.preventDefault();
+      await submitReservation('CONFIRM_IMMEDIATELY');
+    }
+
+    async function submitReservation(mode) {
+      const interval = getSelectedInterval();
+      if (!interval) return;
+
+      const hamsterObj = hamsters.find(h => h.id === selectedHamsterId);
+      const isApprovalNeeded = hamsterObj ? hamsterObj.requires_approval : false;
+
+      try {
+        // Step 1: POST /api/reservations (creates DRAFT)
+        const createRes = await fetch('/api/reservations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: currentUserId,
+            hamster_id: selectedHamsterId,
+            start_time: interval.start.toISOString(),
+            end_time: interval.end.toISOString()
+          })
+        });
+
+        const draftData = await createRes.json();
+        if (!createRes.ok) {
+          showToast('error', draftData.error || 'Nepodařilo se vytvořit rezervaci.');
+          return;
+        }
+
+        if (mode === 'DRAFT') {
+          showToast('info', `Návrh #${draftData.id} byl uložen. Křeček zatím není blokován, nezapomeňte jej včas potvrdit.`);
+          await loadMyReservations();
+          return;
+        }
+
+        // Step 2: Immediate Confirmation (OP-03)
+        const confirmRes = await fetch(`/api/reservations/${draftData.id}/confirm`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: currentUserId })
+        });
+
+        const confirmData = await confirmRes.json();
+        if (!confirmRes.ok) {
+          showToast('error', `Návrh vytvořen (#${draftData.id}), ale potvrzení selhalo: ${confirmData.error}`);
+          await loadMyReservations();
+          return;
+        }
+
+        if (confirmData.status === 'PENDING_APPROVAL') {
+          showToast('success', `Žádost #${draftData.id} byla odeslána panu učiteli ke schválení.`);
+        } else {
+          showToast('success', `Skvělé! Termín #${draftData.id} byl závazně potvrzen. Křeček se na vás těší.`);
+        }
+
+        await loadMyReservations();
+
+      } catch (err) {
+        showToast('error', 'Došlo k chybě při spojení se serverem.');
+      }
+    }
+
+    // CONFIRM DRAFT (OP-03)
+    async function confirmExistingDraft(id) {
+      try {
+        const res = await fetch(`/api/reservations/${id}/confirm`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: currentUserId })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showToast('error', data.error || 'Potvrzení selhalo.');
+        } else {
+          if (data.status === 'PENDING_APPROVAL') {
+            showToast('info', 'Rezervace odeslána správci ke schválení.');
+          } else {
+            showToast('success', 'Rezervace byla úspěšně potvrzena.');
+          }
+          loadMyReservations();
+        }
+      } catch (err) {
+        showToast('error', 'Chyba při potvrzování rezervace.');
+      }
+    }
+
+    // CANCEL RESERVATION (OP-04)
+    async function cancelExistingReservation(id) {
+      const confirmed = await showModalConfirm({
+        icon: '🗑️',
+        title: 'Zrušit rezervaci?',
+        message: `Opravdu si přejete zrušit rezervaci #${id}? Křeček bude ihned uvolněn pro ostatní a obnoví se vám denní limit.`,
+        confirmText: 'Ano, zrušit',
+        cancelText: 'Ponechat',
+        danger: true
+      });
+      if (!confirmed) return;
+
+      try {
+        const res = await fetch(`/api/reservations/${id}/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: currentUserId })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showToast('error', data.error || 'Zrušení rezervace se nezdařilo.');
+        } else {
+          showToast('info', 'Rezervace byla zrušena a křeček je opět volný.');
+          loadMyReservations();
+        }
+      } catch (err) {
+        showToast('error', 'Chyba při komunikaci se serverem.');
+      }
+    }
+
+    // LOAD MY RESERVATIONS
+    async function loadMyReservations() {
+      const container = document.getElementById('myReservationsList');
+      try {
+        const res = await fetch(`/api/reservations?user_id=${encodeURIComponent(currentUserId)}`);
+        if (!res.ok) throw new Error('Nelze načíst rezervace');
+        myReservations = await res.json();
+        renderMyReservations();
+        updateAvailabilityAndMeter();
+        loadCalendarReservations();
+      } catch (err) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-state-desc" style="color:var(--rose)">Chyba při načítání vašich rezervací.</div></div>`;
+      }
+    }
+
+    function filterReservations(filter, buttonElem) {
+      activeFilter = filter;
+      document.querySelectorAll('.tab-link').forEach(b => b.classList.remove('active'));
+      buttonElem.classList.add('active');
+      renderMyReservations();
+    }
+
+    function renderMyReservations() {
+      const container = document.getElementById('myReservationsList');
+      
+      // Update counters
+      document.getElementById('countAll').textContent = myReservations.length;
+      document.getElementById('countConfirmed').textContent = myReservations.filter(r => r.status === 'CONFIRMED').length;
+      document.getElementById('countPending').textContent = myReservations.filter(r => r.status === 'PENDING_APPROVAL').length;
+      document.getElementById('countDraft').textContent = myReservations.filter(r => r.status === 'DRAFT').length;
+
+      const filtered = myReservations.filter(r => {
+        if (activeFilter === 'ALL') return true;
+        return r.status === activeFilter;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">🌿</div>
+            <div class="empty-state-title">V této kategorii nejsou žádné záznamy</div>
+            <div class="empty-state-desc">Všechny nové termíny se automaticky zobrazí zde.</div>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(r => {
+        const start = new Date(r.start_time);
+        const end = new Date(r.end_time);
+        const timeFmt = `${formatDatePretty(r.start_time)} • ${formatTime(start)} – ${formatTime(end)}`;
+        const hamsterName = getHamsterName(r.hamster_id);
+        const avatar = HAMSTER_META[r.hamster_id]?.avatar || '🐹';
+
+        let badge = '';
+        let statusNote = '';
+        let actions = '';
+
+        if (r.status === 'DRAFT') {
+          badge = `<span class="badge badge-amber">Návrh (DRAFT)</span>`;
+          statusNote = 'Nezávazná rezervace, křeček ještě není blokován.';
+          actions = `
+            <button class="btn btn-sm btn-sage" onclick="confirmExistingDraft(${r.id})">✨ Potvrdit rezervaci</button>
+            <button class="btn btn-sm btn-subtle btn-danger-subtle" onclick="cancelExistingReservation(${r.id})">Smazat</button>
+          `;
+        } else if (r.status === 'PENDING_APPROVAL') {
+          badge = `<span class="badge badge-lavender">Čeká na schválení</span>`;
+          statusNote = 'Pan učitel žádost brzy posoudí v kabinetu.';
+          actions = `
+            <button class="btn btn-sm btn-subtle btn-danger-subtle" onclick="cancelExistingReservation(${r.id})">Zrušit žádost</button>
+          `;
+        } else if (r.status === 'CONFIRMED') {
+          badge = `<span class="badge badge-sage">Potvrzeno</span>`;
+          statusNote = 'Křeček se na vás těší! Biologický kabinet č. 204.';
+          actions = `
+            <button class="btn btn-sm btn-subtle btn-danger-subtle" onclick="cancelExistingReservation(${r.id})">Zrušit termín</button>
+          `;
+        } else if (r.status === 'CANCELLED') {
+          badge = `<span class="badge badge-muted">Zrušeno</span>`;
+          statusNote = 'Termín byl stornován a uvolněn.';
+        } else if (r.status === 'REJECTED') {
+          badge = `<span class="badge badge-muted" style="color:var(--rose)">Zamítnuto</span>`;
+          statusNote = 'Správce žádost neschválil (křeček potřebuje klid).';
+        } else if (r.status === 'EXPIRED') {
+          badge = `<span class="badge badge-muted">Vypršelo</span>`;
+          statusNote = 'Návrh nebyl včas potvrzen před začátkem slotu.';
+        }
+
+        return `
+          <div class="res-card">
+            <div class="res-card-left">
+              <div class="res-hamster-icon">${avatar}</div>
+              <div>
+                <div class="res-info-title">
+                  <span>${hamsterName}</span>
+                  ${badge}
+                </div>
+                <div class="res-info-meta">📅 ${timeFmt}</div>
+                <div class="res-info-note">${statusNote}</div>
+              </div>
+            </div>
+            <div class="res-card-actions">
+              ${actions}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ==========================================================
+    // ADMIN ACTIONS (OP-05 Approve / Reject & OP-06 Expiration)
+    // ==========================================================
+    async function loadAdminRequests() {
+      const container = document.getElementById('adminPendingList');
+      try {
+        const res = await fetch('/api/reservations?status=PENDING_APPROVAL');
+        const pending = await res.json();
+
+        if (pending.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-state-icon">✨</div>
+              <div class="empty-state-title">Žádné čekající žádosti</div>
+              <div class="empty-state-desc">Všechny požadavky na křečky s dohledem jsou vyřízeny.</div>
+            </div>
+          `;
+          return;
+        }
+
+        container.innerHTML = pending.map(r => {
+          const start = new Date(r.start_time);
+          const end = new Date(r.end_time);
+          const timeFmt = `${formatDatePretty(r.start_time)} • ${formatTime(start)} – ${formatTime(end)}`;
+          const hamsterName = getHamsterName(r.hamster_id);
+          const avatar = HAMSTER_META[r.hamster_id]?.avatar || '🐹';
+
+          return `
+            <div class="res-card" style="border-left: 4px solid var(--lavender);">
+              <div class="res-card-left">
+                <div class="res-hamster-icon">${avatar}</div>
+                <div>
+                  <div class="res-info-title">
+                    <span>${hamsterName}</span>
+                    <span class="badge badge-lavender">Žádost #${r.id}</span>
+                  </div>
+                  <div class="res-info-meta">👤 Student: <strong>${r.user_id}</strong> &bull; 📅 ${timeFmt}</div>
+                  <div class="res-info-note">Vyžaduje posouzení kustoda před alokací.</div>
+                </div>
+              </div>
+              <div class="res-card-actions">
+                <button class="btn btn-sm btn-sage" onclick="decideAdminRequest(${r.id}, 'APPROVE')">
+                  ✅ Schválit
+                </button>
+                <button class="btn btn-sm btn-subtle btn-danger-subtle" onclick="decideAdminRequest(${r.id}, 'REJECT')">
+                  ❌ Zamítnout
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+      } catch (err) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-state-desc" style="color:var(--rose)">Chyba při načítání fronty.</div></div>`;
+      }
+    }
+
+    async function decideAdminRequest(id, decision) {
+      try {
+        const res = await fetch(`/api/reservations/${id}/decide`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-role': 'MANAGER'
+          },
+          body: JSON.stringify({ decision })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          showToast('error', data.error || 'Rozhodnutí se nepodařilo uložit.');
+        } else {
+          showToast('success', decision === 'APPROVE' ? `Žádost #${id} byla schválena!` : `Žádost #${id} byla zamítnuta.`);
+          loadAdminRequests();
+          loadAllSystemReservations();
+        }
+      } catch (err) {
+        showToast('error', 'Chyba při odesílání rozhodnutí.');
+      }
+    }
+
+    async function triggerExpire() {
+      try {
+        const res = await fetch('/api/reservations/expire', { method: 'POST' });
+        const data = await res.json();
+        showToast('info', `Automatický časovač zkontrolován. Expirováno: ${data.expiredCount} návrhů.`);
+        loadAdminRequests();
+        loadAllSystemReservations();
+      } catch (err) {
+        showToast('error', 'Chyba při spouštění časovače expirací.');
+      }
+    }
+
+    async function loadAllSystemReservations() {
+      const container = document.getElementById('allReservationsList');
+      try {
+        const res = await fetch('/api/reservations');
+        const list = await res.json();
+
+        if (list.length === 0) {
+          container.innerHTML = `<div class="empty-state"><div class="empty-state-desc">Zatím nebyly vytvořeny žádné rezervace.</div></div>`;
+          return;
+        }
+
+        container.innerHTML = list.slice(0, 15).map(r => {
+          const start = new Date(r.start_time);
+          const end = new Date(r.end_time);
+          const timeFmt = `${formatDatePretty(r.start_time)} ${formatTime(start)}–${formatTime(end)}`;
+          return `
+            <div class="res-card" style="padding: 12px 18px;">
+              <div class="res-card-left">
+                <span style="font-size: 18px;">🐹</span>
+                <div>
+                  <div style="font-size: 13.5px; font-weight: 600;">#${r.id} &bull; ${getHamsterName(r.hamster_id)} (${r.user_id})</div>
+                  <div style="font-size: 12px; color: var(--text-muted);">📅 ${timeFmt} &bull; Vytvořeno: ${formatTime(new Date(r.created_at))}</div>
+                </div>
+              </div>
+              <div>
+                <span class="badge ${r.status === 'CONFIRMED' ? 'badge-sage' : (r.status === 'PENDING_APPROVAL' ? 'badge-lavender' : 'badge-muted')}">${r.status}</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+      } catch (err) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-state-desc" style="color:var(--rose)">Chyba při načítání registru.</div></div>`;
+      }
+    }
+
+    // Utility Helpers
+    function getHamsterName(id) {
+      const h = hamsters.find(item => item.id === id);
+      return h ? h.name : id;
+    }
+
+    function formatDatePretty(isoString) {
+      if (!isoString) return '';
+      const d = new Date(isoString);
+      const days = ['Neděle', 'Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek', 'Sobota'];
+      const dayName = days[d.getDay()];
+      return `${dayName} ${d.getDate()}. ${d.getMonth() + 1}.`;
+    }
+
+    function formatTime(dateObj) {
+      return dateObj.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Toast Alert Notification
+    function showToast(type, message) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      
+      const icon = type === 'success' ? '🌿' : (type === 'error' ? '⚠️' : 'ℹ️');
+      toast.innerHTML = `<span>${icon}</span><span style="flex:1;">${message}</span>`;
+      
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(8px)';
+        setTimeout(() => toast.remove(), 260);
+      }, 4500);
+    }
+
+    // ==========================================================
+    // CALENDAR SCHEDULE (Purely for displaying reservations & slot availability)
+    // ==========================================================
+    async function loadCalendarReservations() {
+      try {
+        const res = await fetch('/api/reservations');
+        if (!res.ok) return;
+        allReservationsCache = await res.json();
+        renderCalendarSchedule();
+      } catch (err) {
+        console.error('Chyba kalendáře:', err);
+      }
+    }
+
+    function navigateCalendarWeek(direction) {
+      if (direction === 0) {
+        calendarWeekOffset = 0;
+      } else {
+        calendarWeekOffset += direction;
+      }
+      renderCalendarSchedule();
+    }
+
+    function renderCalendarSchedule() {
+      const grid = document.getElementById('calendarWeekGrid');
+      const subtitle = document.getElementById('calendarSubtitle');
+      if (!grid) return;
+
+      const currentHamster = hamsters.find(h => h.id === selectedHamsterId);
+      const hamsterName = currentHamster ? currentHamster.name : selectedHamsterId;
+      
+      if (subtitle) {
+        subtitle.innerHTML = `Přehled obsazenosti pro křečka <strong>${hamsterName}</strong>. Kliknutím na den jej nastavíte do formuláře výše.`;
+      }
+
+      // Calculate Monday of current week + calendarWeekOffset
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const startOfWeek = new Date(today);
+      const dayOfWeek = startOfWeek.getDay(); // 0 is Sunday, 1 is Monday...
+      const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      startOfWeek.setDate(startOfWeek.getDate() + diffToMonday + (calendarWeekOffset * 7));
+
+      const dayNames = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'];
+      const selectedDateStr = document.getElementById('bookDate')?.value || '';
+
+      let html = '';
+      for (let i = 0; i < 7; i++) {
+        const dateObj = new Date(startOfWeek);
+        dateObj.setDate(startOfWeek.getDate() + i);
+
+        const yyyy = dateObj.getFullYear();
+        const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const dd = String(dateObj.getDate()).padStart(2, '0');
+        const dateStr = `${yyyy}-${mm}-${dd}`;
+
+        const isToday = dateObj.getTime() === today.getTime();
+        const isSelected = dateStr === selectedDateStr;
+
+        // Filter active / pending reservations for this hamster on this day
+        const dayReservations = allReservationsCache.filter(r => {
+          if (r.hamster_id !== selectedHamsterId) return false;
+          if (r.status !== 'CONFIRMED' && r.status !== 'PENDING_APPROVAL') return false;
+          const rDateStr = r.start_time.split('T')[0];
+          return rDateStr === dateStr;
+        }).sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+
+        let eventsHtml = '';
+        if (dayReservations.length === 0) {
+          eventsHtml = `
+            <div class="cal-day-free-label">
+              <span style="font-size: 15px;">🌱</span>
+              <span>Celý den volno</span>
+            </div>
+          `;
+        } else {
+          eventsHtml = dayReservations.map(r => {
+            const s = new Date(r.start_time);
+            const e = new Date(r.end_time);
+            const timeLabel = `${formatTime(s)}–${formatTime(e)}`;
+            const statusLabel = r.status === 'CONFIRMED' ? 'Obsazeno' : 'Čeká';
+            return `
+              <div class="cal-event-pill status-${r.status}" title="${r.user_id} (${timeLabel})">
+                <span><strong>${timeLabel}</strong></span>
+                <span style="font-size: 9.5px; opacity: 0.85;">${statusLabel}</span>
+              </div>
+            `;
+          }).join('');
+        }
+
+        const countBadge = dayReservations.length > 0 
+          ? `<span class="day-count-badge" title="${dayReservations.length} rezervací">${dayReservations.length}</span>` 
+          : '';
+
+        html += `
+          <div class="day-column ${isSelected ? 'active-day' : ''} ${isToday ? 'is-today' : ''}" onclick="selectCalendarDay('${dateStr}', this)">
+            <div class="day-header">
+              <div class="day-header-meta">
+                <span class="day-name">${dayNames[i]}</span>
+                ${countBadge}
+              </div>
+              <div class="day-number">${dateObj.getDate()}. ${dateObj.getMonth() + 1}.</div>
+              ${isToday ? '<span class="day-today-tag">Dnes</span>' : ''}
+            </div>
+            <div class="day-events-list">
+              ${eventsHtml}
+            </div>
+          </div>
+        `;
+      }
+
+      grid.innerHTML = html;
+    }
+
+    function selectCalendarDay(dateStr, colElem) {
+      const input = document.getElementById('bookDate');
+      if (input) {
+        input.value = dateStr;
+        
+        // Update highlight
+        document.querySelectorAll('.day-column').forEach(c => c.classList.remove('active-day'));
+        if (colElem) {
+          colElem.classList.add('active-day');
+        }
+
+        // Reset quick chips
+        document.querySelectorAll('#reservationForm .chip-group .chip').forEach(c => c.classList.remove('active'));
+
+        onFormParamChange();
+        showToast('info', `Vybráno datum: ${formatDatePretty(dateStr)}`);
+      }
+    }
+
+    // ==========================================================
+    // MODAL DIALOG POPUP COMPONENT (replaces alert / confirm)
+    // ==========================================================
+    let modalResolver = null;
+
+    function showModalConfirm({ icon = '❓', title = 'Potvrzení akce', message = '', confirmText = 'Potvrdit', cancelText = 'Zrušit', danger = false }) {
+      return new Promise((resolve) => {
+        modalResolver = resolve;
+        document.getElementById('modalIcon').textContent = icon;
+        document.getElementById('modalTitle').textContent = title;
+        document.getElementById('modalMessage').textContent = message;
+
+        const confirmBtn = document.getElementById('modalConfirmBtn');
+        const cancelBtn = document.getElementById('modalCancelBtn');
+
+        confirmBtn.textContent = confirmText;
+        confirmBtn.className = danger ? 'btn btn-primary' : 'btn btn-sage';
+        confirmBtn.style.background = danger ? 'var(--rose)' : '';
+
+        cancelBtn.textContent = cancelText;
+        cancelBtn.style.display = 'inline-flex';
+
+        document.getElementById('modalBackdrop').style.display = 'flex';
+      });
+    }
+
+    function showModalAlert({ icon = 'ℹ️', title = 'Upozornění', message = '', buttonText = 'Rozumím' }) {
+      return new Promise((resolve) => {
+        modalResolver = resolve;
+        document.getElementById('modalIcon').textContent = icon;
+        document.getElementById('modalTitle').textContent = title;
+        document.getElementById('modalMessage').textContent = message;
+
+        const confirmBtn = document.getElementById('modalConfirmBtn');
+        const cancelBtn = document.getElementById('modalCancelBtn');
+
+        confirmBtn.textContent = buttonText;
+        confirmBtn.className = 'btn btn-primary';
+        confirmBtn.style.background = '';
+        cancelBtn.style.display = 'none';
+
+        document.getElementById('modalBackdrop').style.display = 'flex';
+      });
+    }
+
+    function closeModal(result) {
+      document.getElementById('modalBackdrop').style.display = 'none';
+      if (modalResolver) {
+        modalResolver(result);
+        modalResolver = null;
+      }
+    }
+
+    function onModalBackdropClick(e) {
+      if (e.target.id === 'modalBackdrop') {
+        closeModal(false);
+      }
+    }
+
+    // Close modal on Escape key
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const backdrop = document.getElementById('modalBackdrop');
+        if (backdrop && backdrop.style.display !== 'none') {
+          closeModal(false);
+        }
+      }
+    });
+  </script>
+</body>
+</html>
