@@ -75,6 +75,7 @@ Všechny klíčové příkazy jsou definovány v `package.json`:
 | `npm run build` | **Kompilace** TypeScriptu do složky `dist/` pomocí `tsc`. |
 | `npm start` | **Produkční start** zkompilovaného serveru z `dist/index.js`. |
 | `npm run spike` | **Engineering Spike (C01)** — rychlé ověření spojení s PostgreSQL a zápisu/čtení testovací rezervace. |
+| `npm run verify` | **Automatizované ověření C02** — spustí všech 30 scénářů Specification Baseline proti PostgreSQL (`30 PASS / 0 FAIL`). |
 
 Server standardně naslouchá na portu definovaném v `.env` (výchozí: `http://localhost:3000`).
 
@@ -122,13 +123,13 @@ Pokud preferujete ovládání přes HTTP klienta (cURL, Postman, REST Client):
 
 ## CP1 walking skeleton
 
-Tato end-to-end cesta (vytvoření rezervace křečka) bude první plně spustitelnou částí aplikace pro fázi CP1:
+Tato end-to-end cesta představuje minimální plně spustitelnou část aplikace pro fázi CP1:
 
 1. **`POST /api/reservations`** 
-   - V těle požadavku přijde: `student_id`, `hamster_id` (např. "Ferda"), `start_time` a `end_time`.
+   - V těle požadavku přijde: `user_id`, `hamster_id` (např. "Ferda"), `start_time` a `end_time`.
 2. **→ validate** 
    - Kontrola "Common rule": Ověříme v databázi, že Ferda v daný čas nemá jinou potvrzenou rezervaci.
-   - Kontrola "Domain-specific rule": Ověříme, že požadovaný interval spolu s potvrzenými rezervacemi stejné dvojice `student_id` a `hamster_id` nepřekročí 30 minut v žádném kalendářním dni (`Europe/Prague`); přesná pravidla jsou v [Project Frame](docs/intent-and-change.md#domain-specific-business-rule).
+   - Kontrola "Domain-specific rule": Ověříme, že požadovaný interval spolu s potvrzenými rezervacemi stejné dvojice `user_id` a `hamster_id` nepřekročí 30 minut v žádném kalendářním dni (`Europe/Prague`); přesná pravidla jsou v [Project Frame](docs/intent-and-change.md#domain-specific-business-rule).
 3. **→ persist** 
    - Zápis nového záznamu o rezervaci ve stavu `DRAFT` do PostgreSQL tabulky `reservations`.
 4. **→ return reservation ID**
@@ -136,4 +137,11 @@ Tato end-to-end cesta (vytvoření rezervace křečka) bude první plně spustit
 5. **→ automated check**
    - Automatický integrační test zavolá tuto cestu, získá ID a přes `GET /api/reservations/{id}` ověří uložená data a stav `DRAFT`.
 
-Vytvoření návrhu ještě neblokuje čas křečka. Potvrzení bude samostatná operace, která znovu ověří dostupnost a denní limit a teprve potom změní stav na `CONFIRMED` a odešle oznámení přes Notification Service. Tato operace není součástí minimální cesty CP1 popsané výše.
+Vytvoření návrhu ještě neblokuje čas křečka. Potvrzení je samostatná
+operace, která znovu ověří dostupnost a denní limit. U běžného křečka
+provede přechod `DRAFT → CONFIRMED`; u křečka vyžadujícího schválení
+provede přechod `DRAFT → PENDING_APPROVAL`.
+
+Stav `PENDING_APPROVAL` dočasně blokuje křečka a čerpá denní limit,
+dokud správce žádost neschválí, nezamítne, student ji nezruší nebo
+nedojde k její expiraci.

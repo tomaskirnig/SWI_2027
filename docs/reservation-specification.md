@@ -1,6 +1,11 @@
 # Návrh Specification Baseline v0.1
+Tento dokument obsahuje přijatou Specification Baseline v0.1
+a její následné rozšíření Baseline v0.2.
 
-Tento dokument je pracovní návrh baseline v0.1. Textové požadavky a společná pravidla prošly kontrolou přijetí a vzájemné konzistence. Za schválenou týmovou baseline bude dokument označen až po doplnění diagramů a kontrole jejich souladu s textem.
+Textové požadavky, společná pravidla a systémové diagramy prošly
+kontrolou přijetí a vzájemné konzistence. Baseline v0.2 zachovává
+původní pravidla v0.1 tam, kde nejsou explicitně rozšířena
+v oddílu 4.2.
 
 ## 1. Čtyři základní operace
 
@@ -298,7 +303,9 @@ Interval opakování a maximální počet pokusů o doručení oznámení zatím
 
 ## 2. Společná doménová pravidla a invarianty
 
-Tato část je jediným autoritativním místem pro pravidla platná napříč operacemi. Jednotlivé operace pravidla používají a odkazují na ně, ale nemění jejich význam.
+Tato část je autoritativním místem pro společná pravidla
+Baseline v0.1. Změny těchto pravidel zavedené v Baseline v0.2
+jsou explicitně uvedeny v oddílu 4.2.
 
 ### BR-01 — Význam časového intervalu
 
@@ -409,16 +416,70 @@ Někteří křečci (speciální/vzácní nebo vyžadující dohled) vyžadují 
 
 - **Změněná podmínka:** Rezervace křečka vyžadujícího schválení nemůže přejít přímo do `CONFIRMED`, ale vyžaduje mezistav `PENDING_APPROVAL` a rozhodnutí správce křečka.
 - **Dotčené požadavky:** `REQ-03` (rozšíření blokování na stav `PENDING_APPROVAL`), `REQ-05` (větvení potvrzení na přímé vs. žádost o schválení), `REQ-08` / `REQ-09` (možnost stornovat i stav `PENDING_APPROVAL`).
-- **Nedotčené požadavky + proč:** `REQ-01` a `REQ-02` (Create stále vytváří pouze `DRAFT`), `BR-01` (sémantika intervalů), `BR-04` (denní limit 30 minut student–křeček), `BR-06` (transakční notifikace a outbox vzor se nemění).
+- **Nedotčené požadavky + proč:** `REQ-01` a `REQ-02`
+  (Create stále vytváří pouze `DRAFT`) a `BR-01`
+  (sémantika časových intervalů se nemění).
+- **Rozšířená společná pravidla:** `BR-02`, `BR-03`, `BR-04`,
+  `BR-05` a `BR-06` jsou pro baseline v0.2 rozšířena
+  o schvalovací proces a nové stavy rezervace.
 - **Nový aktér / operace:** Aktér **Správce křečka**, systémový aktér **Systémový časovač**, operace **OP-05: Rozhodnout o rezervaci** a **OP-06: Expirace žádostí**.
 - **Změněná pravidla a význam stavů:**
   - `PENDING_APPROVAL`: Dočasná alokace – chrání termín před kolizí a dočasně čerpá studentův denní limit.
   - `REJECTED`: Koncový stav zamítnutí – uvolňuje alokaci i limit.
-  - `EXPIRED`: Koncový stav při nečinnosti správce (1 hodinu před začátkem) – uvolňuje alokaci i limit.
-- **Změna diagramů:** Zpracována a visualizována v [DIAGRAMS.md](file:///C:/Users/tomki/Desktop/SWI_2027/DIAGRAMS.md#L254-L330) (oddíl 2.1 a 2.2).
+  - `EXPIRED`: Koncový stav při nečinnosti správce po dosažení hranice.
+  - `currentTime >= start - 1h`; uvolňuje alokaci i limit.
+
+- **Změna diagramů:** Zpracována a vizualizována v
+  [DIAGRAMS.md](../DIAGRAMS.md) (oddíly 2.1 a 2.2).
 - **Architektonické drivery pro C03:**
   1. *Asynchronní schvalovací proces:* Oddělení zadání žádosti od autorizačního rozhodnutí v čase.
   2. *Automatický plánovač / časovač (Scheduler):* Hlídání a automatické odbavování expirací bez lidského zásahu.
+
+
+### Rozšíření společných pravidel pro Baseline v0.2
+
+- **BR-02 — Invariant exkluzivního křečka (v0.2):**
+  Dostupnost křečka blokují rezervace ve stavech `CONFIRMED`
+  a `PENDING_APPROVAL`. Stavy `DRAFT`, `CANCELLED`,
+  `REJECTED` a `EXPIRED` dostupnost neblokují.
+  Překrývající se alokace musí být vyloučeny také při
+  souběžných operacích.
+
+- **BR-03 — Politika rušení a časových termínů (v0.2):**
+  Student může zrušit vlastní rezervaci ve stavu `DRAFT`,
+  `CONFIRMED` nebo `PENDING_APPROVAL`, pokud platí
+  `currentTime <= start - 15 min`.
+  Pro rozhodnutí Správce křečka platí samostatná hranice:
+  rozhodnutí je možné pouze při `currentTime < start - 1h`.
+  Od `currentTime >= start - 1h` je nerozhodnutá žádost
+  určena k expiraci.
+
+- **BR-04 — Denní limit student–křeček (v0.2):**
+  Do denního limitu 30 minut se započítávají rezervace
+  `CONFIRMED` a dočasně také `PENDING_APPROVAL`.
+  Stavy `DRAFT`, `CANCELLED`, `REJECTED` a `EXPIRED`
+  denní limit nečerpají.
+
+- **BR-05 — Význam stavů a povolené přechody (v0.2):**
+  Přibývají stavy `PENDING_APPROVAL`, `REJECTED`
+  a `EXPIRED`.
+
+  Povolené nové přechody jsou:
+  `DRAFT → PENDING_APPROVAL`,
+  `PENDING_APPROVAL → CONFIRMED`,
+  `PENDING_APPROVAL → REJECTED`,
+  `PENDING_APPROVAL → EXPIRED`
+  a `PENDING_APPROVAL → CANCELLED`.
+
+  `REJECTED` a `EXPIRED` jsou koncové stavy.
+
+- **BR-06 — Oznámení o změně stavu (v0.2):**
+  Schvalovací proces rozšiřuje používání outboxu také
+  na oznámení související s čekáním na schválení,
+  rozhodnutím správce a expirací žádosti.
+  Selhání doručení oznámení nesmí vrátit již provedenou
+  změnu stavu.
+
 
 ---
 
@@ -431,14 +492,14 @@ Správce křečka posoudí čekající žádost studenta a autoritativně rozhod
 Oprávněný Správce křečka odešle rozhodnutí (`APPROVE` nebo `REJECT`) k existující rezervaci ve stavu `PENDING_APPROVAL`.
 
 **Pozorovatelné požadavky:**  
-- **REQ-10 (Schválení):** Pokud je rezervace ve stavu `PENDING_APPROVAL`, křeček je aktivní, platí `currentTime <= start - 15 min` a rozhodnutí je `APPROVE`, systém převede rezervaci do stavu `CONFIRMED`, zachová alokaci i započtení denního limitu a odešle oznámení studentovi.
+- **REQ-10 (Schválení):** Pokud je rezervace ve stavu `PENDING_APPROVAL`, křeček je aktivní, platí `currentTime < start - 1h` a rozhodnutí je `APPROVE`, systém převede rezervaci do stavu `CONFIRMED`, zachová alokaci i započtení denního limitu a odešle oznámení studentovi.
 - **REQ-11 (Zamítnutí):** Pokud je rozhodnutí `REJECT`, systém převede rezervaci do stavu `REJECTED`, uvolní blokování křečka i denní limit studenta a odešle oznámení studentovi.
 - **REQ-12 (Neoprávněné / Neplatné rozhodnutí):** Pokus neoprávněné osoby nebo pokus rozhodnout rezervaci v jiném stavu než `PENDING_APPROVAL` systém odmítne bez změny dat.
 
 **Předpoklady:**  
 - Uživatel je autentizován v roli Správce křečka.
 - Rezervace existuje a je ve stavu `PENDING_APPROVAL`.
-- Čas rozhodnutí splňuje lhůtu před začátkem rezervace (`currentTime < start`).
+- Čas rozhodnutí splňuje lhůtu před začátkem rezervace (`currentTime < start - 1h`).
 
 **Stav po úspěšném provedení:**  
 - Při schválení: Rezervace je `CONFIRMED`, křeček zůstává závazně alokován a denní limit zůstává vyčerpán.
@@ -448,8 +509,9 @@ Oprávněný Správce křečka odešle rozhodnutí (`APPROVE` nebo `REJECT`) k e
 `PENDING_APPROVAL → CONFIRMED` nebo `PENDING_APPROVAL → REJECTED`
 
 **Příklady ověření:**  
-- **V-21:** Správce schválí platnou žádost `PENDING_APPROVAL` → přechod do `CONFIRMED`, student obdrží oznámení o schválení.
-- **V-22:** Správce zamítne platnou žádost `PENDING_APPROVAL` → přechod do `REJECTED`, termín je okamžitě dostupný v `Check Availability` a studentovi se uvolní limit.
+- **V-21:** Správce více než 1 hodinu před začátkem schválí platnou
+žádost `PENDING_APPROVAL` → přechod do `CONFIRMED`, student obdrží oznámení o schválení.
+- **V-22:** Správce zamítne platnou žádost `PENDING_APPROVAL` → přechod do `REJECTED`, termín je okamžitě dostupný v `Check         Availability` a studentovi se uvolní limit.
 - **V-23:** Student se pokusí zavolat OP-05 na vlastní žádost → odmítnuto z důvodu neoprávněného přístupu.
 - **V-24:** Pokus schválit rezervaci, která je již `CANCELLED`, `EXPIRED` nebo `CONFIRMED` → odmítnuto bez změny stavu.
 
@@ -464,9 +526,9 @@ Zabránit zablokování křečka a studentova denního limitu v případě, že 
 Systémový plánovač (časovač) periodicky kontroluje nerozhodnuté žádosti.
 
 **Pozorovatelné požadavky:**  
-- **REQ-13:** Pokud je rezervace ve stavu `PENDING_APPROVAL` a do jejího začátku zbývá méně než 1 hodina (`currentTime >= start - 1h`), systém rezervaci automaticky převede do stavu `EXPIRED`.
+- **REQ-13:** Pokud je rezervace ve stavu `PENDING_APPROVAL` a do jejího začátku zbývá nejvýše 1 hodina (`currentTime >= start - 1h`), systém rezervaci automaticky převede do stavu `EXPIRED`.
 - **REQ-14:** Přechod do stavu `EXPIRED` okamžitě uvolní alokaci křečka i studentův denní limit a vygeneruje oznámení pro studenta i správce křečka.
 
 **Příklady ověření:**  
-- **V-25:** Žádost `PENDING_APPROVAL` v čase `start - 59 minut` bez rozhodnutí správce → časovač ji změní na `EXPIRED`, křeček je volný pro ostatní.
+- **V-25:** Žádost `PENDING_APPROVAL` přesně v čase `start - 1h` bez rozhodnutí správce → časovač ji změní na `EXPIRED`, křeček je volný pro ostatní a studentovi se uvolní denní limit.
 - **V-26:** Žádost `PENDING_APPROVAL` v čase `start - 2 hodiny` → časovač ji ponechá ve stavu `PENDING_APPROVAL`.

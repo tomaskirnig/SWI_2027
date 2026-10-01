@@ -15,7 +15,7 @@ Tento dokument shrnuje stav plnění požadavků cvičení C02 a kontrolního bo
 | **Diagram případů užití (Use Case)** — aktéři a cíle pro v0.1 i v0.2 | ✅ Hotovo | [DIAGRAMS.md](DIAGRAMS.md) (oddíly 1.1 a 2.2) |
 | **Stavový diagram životního cyklu Reservation** — stavy v0.1 i v0.2 | ✅ Hotovo | [DIAGRAMS.md](DIAGRAMS.md) (oddíly 1.2 a 2.1) |
 | **Diagramy aktivit** — OP-03 Confirm a OP-04 Cancel se znázorněním odpovědností a ochrany proti souběhu | ✅ Hotovo | [DIAGRAMS.md](DIAGRAMS.md) (oddíly 1.3 a 1.4) |
-| **Vzájemná konzistence pohledů** — sjednoceno pravidlo termínů (nejpozději 15 minut před začátkem rezervace), role Správce křečka a význam stavů | ✅ Hotovo | Všechny dokumenty vzájemně lícují |
+| **Vzájemná konzistence pohledů** — sjednocena časová pravidla (Create, Confirm a Cancel nejpozději 15 minut před začátkem; rozhodnutí Správce křečka pouze při `currentTime < start - 1h`; od `currentTime >= start - 1h` expirace), role Správce křečka a význam stavů | ✅ Hotovo | Všechny dokumenty vzájemně lícují |
 | **Baseline v0.2 (Změna: Schvalovací proces)** — změnová karta, analýza dopadu, nová operace OP-05 (Approve/Reject) a OP-06 (Expire) | ✅ Hotovo | [docs/reservation-specification.md](docs/reservation-specification.md) (oddíl 4) a [DIAGRAMS.md](DIAGRAMS.md) (oddíl 2) |
 | **Architektonické drivery pro C03** — souběh v transakcích, transactional outbox pro notifikace, plánovač expirací | ✅ Hotovo | [docs/evidence-and-evolution.md](docs/evidence-and-evolution.md) |
 
@@ -36,6 +36,10 @@ Byla vytvořena plně funkční a zkompilovatelná implementace rezervačního s
   * `cancelReservation` (OP-04) — storno před začátkem s idempotentním úspěchem při opakování.
   * `decideReservation` (OP-05) — rozhodnutí `APPROVE` / `REJECT` Správcem křečka.
   * `expirePendingReservations` (OP-06) — automatická expirace nerozhodnutých žádostí 1h před začátkem.
+* **[src/notification.ts](src/notification.ts) — Abstrakce Notification Service:**
+  * Odděluje pokus o doručení oznámení od business transakce.
+  * Umožňuje deterministicky simulovat úspěch i selhání doručení.
+  * Při selhání se již provedený business přechod nevrací zpět a outbox zpráva zůstává ve stavu `FAILED`.
 * **[src/app.ts](src/app.ts) — REST API endpointy:**
   * `GET /api/hamsters` — katalog křečků.
   * `GET /api/reservations/availability` — ověření dostupnosti (OP-02).
@@ -56,19 +60,33 @@ Byla vytvořena plně funkční a zkompilovatelná implementace rezervačního s
 * **[src/index.ts](src/index.ts) — Vstupní bod:**
   * Start serveru s automatickou inicializací DB a ověřením spojení.
   * Úspěšný TypeScript build bez chyb (`npm run build`).
+* **[src/verify.ts](src/verify.ts) — Automatizované ověření Specification Baseline:**
+  * Integrační ověřovací skript běžící proti PostgreSQL.
+  * Pokrývá všech 30 scénářů `V-01` až `V-26` včetně `V-15A`, `V-15B`, `V-20A` a `V-20B`.
+  * Ověřuje časové hranice, stavové přechody, kolize, denní limit, souběh, schvalování, expiraci i selhání Notification Service.
+  * Aktuální výsledek: `30 PASS`, `0 FAIL`.
+  * Spuštění: `npm run verify`.
+
 
 ---
 
-## 2. Co zbývá dokončit (Ověřovací část C02)
+## 2. Stav ověřovací části C02
 
-1. **Vytvoření a spuštění ověřovacích příkladů (Evidence běhu):**
-   - Vytvořit automatický integrační / demonstrační skript (`src/verify.ts` spouštěný např. přes `npm test` nebo `npm run verify`).
-   - Otestovat alespoň jeden pozitivní a jeden hraniční/negativní scénář pro každou operaci podle specifikace (`V-01` až `V-26`).
-2. **Závěrečný zápis do evidence:**
-   - Zaznamenat ověřený výstup a hash commitu aplikace do [docs/evidence-and-evolution.md](docs/evidence-and-evolution.md).
+1. **Automatizované ověření Specification Baseline — ✅ Hotovo**
+   - Implementován integrační ověřovací skript `src/verify.ts`.
+   - Ověřeny všechny scénáře `V-01` až `V-26`, včetně `V-15A`, `V-15B`, `V-20A` a `V-20B`.
+   - Ověření proběhlo proti PostgreSQL databázi.
+   - Výsledek: `30 PASS`, `0 FAIL`.
 
----
+2. **Evidence běhu — ✅ Hotovo**
+   - Výsledek automatizovaného ověření byl zaznamenán do
+     [docs/evidence-and-evolution.md](docs/evidence-and-evolution.md).
 
+3. **Finální identifikace ověřené verze — ⏳ Zbývá**
+   - Po vytvoření finálního commitu doplnit jeho hash do
+     [docs/evidence-and-evolution.md](docs/evidence-and-evolution.md).
+
+     
 ## 3. Akční plán dalších kroků
 
 - [x] **Krok 1: Implementace API a logiky v `src/`**
@@ -76,9 +94,9 @@ Byla vytvořena plně funkční a zkompilovatelná implementace rezervačního s
   - [x] Implementace validační logiky (časové pravidlo 15 minut předem, kontrola překryvu, denní limit 30 minut).
   - [x] Vystavení REST API endpointů v Express aplikaci.
   - [x] Ověření TypeScript překladu (`npm run build`).
-- [ ] **Krok 2: Vytvoření ověřovacího testovacího skriptu**
+- [x] **Krok 2: Vytvoření ověřovacího testovacího skriptu**
   - Implementace skriptu pokrývajícího klíčové testy ze specifikace (`V-01` až `V-26`).
   - Demonstrace všech stavových přechodů včetně schválení správcem a expirace.
-- [ ] **Krok 3: Spuštění, ověření a finalizace evidence**
+- [x] **Krok 3: Spuštění, ověření a finalizace evidence**
   - Spuštění proti PostgreSQL databázi a ověření správných návratových kódů.
   - Doplnění finálního commitu do dokumentace pro uzavření C02.

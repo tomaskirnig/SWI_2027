@@ -49,22 +49,74 @@ Specification Baseline v0.1 (základní operace Create, Check Availability, Conf
 5. `OP-05 Approve / Reject Reservation` (schválení či zamítnutí správcem křečka).
 6. `OP-06 Expire Reservations` (automatická expirace žádostí 1h před začátkem).
 
-**Skutečně provedené příklady ověření:**  
-- Úspěšné vytvoření `DRAFT` včas (`V-01`), odmítnutí při pozdním podání / méně než 15 min předem (`V-02`).
-- Dostupnost volného křečka (`V-06`), kolize s `CONFIRMED` (`V-07`), dotyk intervalů (`V-08`).
-- Úspěšné potvrzení (`V-11`), kolize při souběhu / limitu (`V-12`, `V-13`, `V-14`), varování při selhání notifikace bez ztráty potvrzení (`V-15B`).
-- Zrušení před začátkem (`V-16`, `V-17`), odmítnutí při pokusu o storno méně než 15 min předem (`V-18`), idempotentní opakované storno (`V-19`).
-- Schválení a zamítnutí správcem křečka (`V-21`, `V-22`), automatická expirace časovačem (`V-25`).
+**Skutečně provedené automatizované ověření:**
 
-**Nalezený nesoulad a způsob vyřešení:**  
-- *Nesoulad:* Časová hranice pro vytvoření, potvrzení a zrušení rezervace byla v původním textovém návrhu formulována obecně jako `currentTime < start`, zatímco detailní pravidlo vyžadovalo dostatečný předstih pro obsluhu.  
-- *Řešení:* Podmínka byla jednotně v celé specifikaci i v diagramech sjednocena na pravidlo **nejpozději 15 minut před začátkem rezervace** (`currentTime <= start - 15 min`).
+Byl vytvořen integrační ověřovací skript `src/verify.ts`,
+spouštěný příkazem:
+
+```bash
+npm run verify
+```
+
+Ověření zahrnuje:
+
+- vytváření rezervací a validaci vstupů,
+- dostupnost a překryvy intervalů,
+- denní limit student–křeček,
+- potvrzení a rušení rezervací,
+- souběžné operace Confirm / Cancel,
+- souběžná konfliktní potvrzení,
+- schvalovací proces `PENDING_APPROVAL`,
+- zamítnutí a automatickou expiraci,
+- selhání doručení Notification Service bez vrácení úspěšné změny stavu.
+
+Byly spuštěny všechny scénáře `V-01` až `V-26`, včetně doplňkových scénářů `V-15A`, `V-15B`, `V-20A` a `V-20B`.
+
+Výsledek skutečného běhu:
+
+```text
+PASS: 30
+FAIL: 0
+CELKEM: 30
+```
+
+Všechny definované ověřovací scénáře prošly úspěšně.
+
+**Nalezené nesoulady a způsob vyřešení:**  
+- Operace Create, Confirm a Cancel používají časovou hranici
+  `currentTime <= start - 15 min`.
+- Pro schvalovací proces Baseline v0.2 byla zavedena samostatná
+  hranice: Správce křečka může rozhodnout pouze při
+  `currentTime < start - 1h`.
+- Od okamžiku `currentTime >= start - 1h` je nerozhodnutá rezervace
+  `PENDING_APPROVAL` určena k automatické expiraci.
+- Stav `PENDING_APPROVAL` v Baseline v0.2 blokuje dostupnost křečka
+  a dočasně čerpá denní limit.
+- Stavy `REJECTED` a `EXPIRED` jsou koncové a uvolňují dostupnost
+  křečka i studentův denní limit.
+
+**Ověření spolehlivosti oznámení:**  
+Pro scénáře `V-15B` a `V-20A` je doručení Notification Service
+v automatizovaném ověření ovladatelné tak, aby bylo možné
+deterministicky simulovat jeho selhání.
+
+Při selhání doručení:
+- již provedený business přechod není vrácen zpět,
+- rezervace zůstává ve stavu `CONFIRMED` nebo `CANCELLED`,
+- odpověď obsahuje rozlišitelné varování,
+- příslušný záznam v `notifications_outbox` zůstává evidovaný
+  se stavem `FAILED` pro pozdější opakování.
 
 **Shrnutí dopadu změny:**  
-Zavedením schvalovacího procesu přibyl mezistav `PENDING_APPROVAL`, který křečka dočasně blokuje, koncový stav zamítnutí `REJECTED` a vypršení `EXPIRED`. Vznikla nová role `Správce křečka` a systémový plánovač úloh.
+Zavedením schvalovacího procesu přibyl mezistav `PENDING_APPROVAL`,
+který křečka dočasně blokuje a dočasně čerpá studentův denní limit.
+Dále přibyly koncové stavy `REJECTED` a `EXPIRED`, které blokování
+i čerpání limitu uvolňují. Vznikla nová role `Správce křečka`
+a systémový plánovač úloh pro automatickou expiraci.
 
 **Zbývající předpoklad / neznámá:**  
 - Provozní parametry Outbox mechanismu (interval opakování a max. počet pokusů doručení e-mailových notifikací).
+- Konkrétní externí Notification Service a její produkční integrace.
 - Způsob perzistence a konfigurace systémového plánovače (Scheduler) v produkčním prostředí.
 
 **Architektonické drivery přenesené do C03:**  
@@ -74,3 +126,7 @@ Zavedením schvalovacího procesu přibyl mezistav `PENDING_APPROVAL`, který k�
 
 **Commit / tag aplikace:**  
 Pracovní větev cvičení C02 připravená pro C03.
+
+- Datum ověření: 1. 10. 2026.
+- Příkaz: `npm run verify`.
+- Výsledek: `30 PASS`, `0 FAIL`.

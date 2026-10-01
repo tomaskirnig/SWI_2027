@@ -246,7 +246,8 @@ Tato část rozšiřuje systém podle **Části B zadání C02**:
 2. **Blokování prostředku v `PENDING_APPROVAL`:**
    - Aby jiný student nemohl termín mezitím zabrat, rezervace ve stavu `PENDING_APPROVAL` **křečka dočasně blokuje a započítává se do denního limitu**.
 3. **Pravidla expirace a rušení:**
-   - **Expirace schválení:** Pokud správce křečka nerozhodne nejpozději **1 hodinu před začátkem rezervace** (nebo do okamžiku začátku), systém rezervaci automaticky převede do `EXPIRED` a křeček i limit se uvolní.
+   - **Expirace schválení:** Pokud je rezervace stále ve stavu
+  `PENDING_APPROVAL` v okamžiku `currentTime >= start - 1h`, systém ji automaticky převede do `EXPIRED` a křeček i denní limit se uvolní.
    - **Storno studentem:** Student může čekající žádost zrušit (`CANCELLED`) nejpozději 15 minut před začátkem rezervace, čímž se mu limit uvolní.
 
 ---
@@ -274,9 +275,9 @@ stateDiagram-v2
         a dočasně čerpá denní limit.
     end note
 
-    PENDING_APPROVAL --> CONFIRMED : OP-05 Approve [schváleno správcem křečka]
-    PENDING_APPROVAL --> REJECTED : OP-05 Reject [zamítnuto správcem křečka]
-    PENDING_APPROVAL --> EXPIRED : Automatický časovač [1h před začátkem bez rozhodnutí]
+    PENDING_APPROVAL --> CONFIRMED : OP-05 Approve [currentTime < start - 1h]
+    PENDING_APPROVAL --> REJECTED : OP-05 Reject [currentTime < start - 1h]
+    PENDING_APPROVAL --> EXPIRED : OP-06 Timer [currentTime >= start - 1h]
     PENDING_APPROVAL --> CANCELLED : OP-04 Cancel [storno studentem nejpozději 15 min před začátkem]
 
     CONFIRMED --> CANCELLED : OP-04 Cancel [storno studentem nejpozději 15 min před začátkem]
@@ -291,7 +292,10 @@ stateDiagram-v2
 
 ## 2.2 Aktualizovaný diagram případů užití (v0.2)
 
-Do systému přibývá nová role aktéra (**Správce křečka**), systémový aktér (**Automatický časovač / Scheduler**) a nová operace **OP-05: Rozhodnout o rezervaci (Approve / Reject)**. Notifikační služba informuje správce křečka o nové žádosti a studenta o výsledku schválení/zamítnutí.
+Do systému přibývá nová role aktéra (**Správce křečka**),
+systémový aktér (**Automatický časovač / Scheduler**) a nové operace
+**OP-05: Rozhodnout o rezervaci (Approve / Reject)** a
+**OP-06: Expirovat nevyřízené žádosti (Expire)**.
 
 ```mermaid
 flowchart LR

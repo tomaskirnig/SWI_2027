@@ -1,5 +1,7 @@
 import { PoolClient } from 'pg';
 import { pool } from './db';
+import { sendNotification } from './notification';
+
 import {
   ReservationStatus,
   isIntervalValid,
@@ -299,7 +301,7 @@ export async function confirmReservation(
     }
 
     // Kontrola křečka
-    const hamsterRes = await client.query('SELECT * FROM hamsters WHERE id = $1', [reservation.hamster_id]);
+    const hamsterRes = await client.query('SELECT * FROM hamsters WHERE id = $1 FOR UPDATE', [reservation.hamster_id]);
     const hamster = hamsterRes.rows[0] as HamsterRow;
     if (!hamster.is_active) {
       throw { status: 400, message: `Křeček '${hamster.name}' není aktivní.` };
@@ -333,13 +335,52 @@ export async function confirmReservation(
       ? `Rezervace ID ${reservationId} byla úspěšně potvrzena.`
       : `Žádost o rezervaci ID ${reservationId} čeká na schválení správcem křečka.`;
 
-    await client.query(
-      `INSERT INTO notifications_outbox (reservation_id, recipient, message)
-       VALUES ($1, $2, $3)`,
+    const notificationResult = await client.query(
+      `INSERT INTO notifications_outbox
+        (reservation_id, recipient, message)
+      VALUES ($1, $2, $3)
+      RETURNING id`,
       [reservationId, userId, notifMsg]
     );
 
+    const notificationId = notificationResult.rows[0].id;
+
+    if (targetStatus === 'PENDING_APPROVAL') {
+      await client.query(
+        `INSERT INTO notifications_outbox (reservation_id, recipient, message)
+        VALUES ($1, $2, $3)`,
+        [
+          reservationId,
+          `spravce:${reservation.hamster_id}`,
+          `Rezervace ID ${reservationId} čeká na vaše schválení.`
+        ]
+      );
+    }
+
     await client.query('COMMIT');
+
+    let warning: string | undefined;
+
+    try {
+      await sendNotification(userId, notifMsg);
+
+      await pool.query(
+        `UPDATE notifications_outbox
+        SET status = 'SENT'
+        WHERE id = $1`,
+        [notificationId]
+      );
+    } catch {
+      warning =
+        'Oznámení se nepodařilo doručit a zůstává evidované pro pozdější opakování.';
+
+      await pool.query(
+        `UPDATE notifications_outbox
+        SET status = 'FAILED'
+        WHERE id = $1`,
+        [notificationId]
+      );
+    }
 
     return {
       id: reservationId,
@@ -347,6 +388,7 @@ export async function confirmReservation(
       hamster_id: reservation.hamster_id,
       requires_approval: hamster.requires_approval,
       message: notifMsg,
+      warning,
     };
   } catch (err) {
     await client.query('ROLLBACK');
@@ -412,20 +454,52 @@ export async function cancelReservation(
       ['CANCELLED', reservationId]
     );
 
-    await client.query(
-      `INSERT INTO notifications_outbox (reservation_id, recipient, message)
-       VALUES ($1, $2, $3)`,
-      [reservationId, userId, `Rezervace ID ${reservationId} byla zrušena.`]
+    const notifMsg =
+  `Rezervace ID ${reservationId} byla zrušena.`;
+
+const notificationResult = await client.query(
+  `INSERT INTO notifications_outbox
+     (reservation_id, recipient, message)
+   VALUES ($1, $2, $3)
+   RETURNING id`,
+  [reservationId, userId, notifMsg]
+);
+
+  const notificationId = notificationResult.rows[0].id;
+
+  await client.query('COMMIT');
+
+  let warning: string | undefined;
+
+  try {
+    await sendNotification(userId, notifMsg);
+
+    await pool.query(
+      `UPDATE notifications_outbox
+      SET status = 'SENT'
+      WHERE id = $1`,
+      [notificationId]
     );
+  } catch {
+    warning =
+      'Oznámení se nepodařilo doručit a zůstává evidované pro pozdější opakování.';
 
-    await client.query('COMMIT');
+    await pool.query(
+      `UPDATE notifications_outbox
+      SET status = 'FAILED'
+      WHERE id = $1`,
+      [notificationId]
+    );
+  }
 
-    return {
-      id: reservationId,
-      status: 'CANCELLED',
-      idempotent: false,
-      message: `Rezervace ID ${reservationId} byla úspěšně zrušena a uvolnila alokaci i limit.`,
-    };
+  return {
+    id: reservationId,
+    status: 'CANCELLED',
+    idempotent: false,
+    message:
+      `Rezervace ID ${reservationId} byla úspěšně zrušena a uvolnila alokaci i limit.`,
+    warning,
+  };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -468,8 +542,32 @@ export async function decideReservation(
     }
 
     const start = new Date(reservation.start_time);
-    if (now.getTime() >= start.getTime()) {
-      throw { status: 400, message: 'Nelze rozhodnout rezervaci, jejíž čas začátku již nastal nebo uplynul.' };
+   if (now.getTime() >= start.getTime() - ONE_HOUR_MS) {
+      throw {
+        status: 400,
+        message: 'Lhůta pro rozhodnutí správce již vypršela; žádost má být expirována.'
+      };
+    }
+
+    const hamsterRes = await client.query(
+      'SELECT * FROM hamsters WHERE id = $1 FOR UPDATE',
+      [reservation.hamster_id]
+    );
+
+    if (hamsterRes.rows.length === 0) {
+      throw {
+        status: 404,
+        message: `Křeček '${reservation.hamster_id}' neexistuje.`
+      };
+    }
+
+    const hamster = hamsterRes.rows[0] as HamsterRow;
+
+    if (decision === 'APPROVE' && !hamster.is_active) {
+      throw {
+        status: 400,
+        message: `Křeček '${hamster.name}' není aktivní a žádost nelze schválit.`
+      };
     }
 
     const newStatus: ReservationStatus = decision === 'APPROVE' ? 'CONFIRMED' : 'REJECTED';
@@ -533,6 +631,16 @@ export async function expirePendingReservations(now: Date = new Date()) {
          VALUES ($1, $2, $3)`,
         [row.id, row.user_id, `Žádost o rezervaci ID ${row.id} expirovala z důvodu nečinnosti správce.`]
       );
+      await client.query(
+       `INSERT INTO notifications_outbox (reservation_id, recipient, message)
+        VALUES ($1, $2, $3)`,
+        [
+          row.id,
+          `spravce:${row.hamster_id}`,
+          `Žádost o rezervaci ID ${row.id} expirovala bez rozhodnutí.`
+        ]
+      );
+
       expiredIds.push(row.id);
     }
 

@@ -75,10 +75,16 @@ export function calculateMinutesPerDay(start: Date, end: Date): Map<string, numb
     const existing = result.get(dayStr) || 0;
     
     // Zjistíme, kolik milisekund zbývá do konce intervalu nebo do konce minuty
-    const nextMinute = new Date(current.getTime() + 60 * 1000);
-    const stepEnd = nextMinute.getTime() > endTime ? endTime : nextMinute.getTime();
-    const durationMinutes = (stepEnd - current.getTime()) / (60 * 1000);
-    
+    const currentMs = current.getTime();
+
+    const nextMinuteBoundary =
+      (Math.floor(currentMs / (60 * 1000)) + 1) * (60 * 1000);
+
+    const stepEnd = Math.min(nextMinuteBoundary, endTime);
+
+    const durationMinutes =
+      (stepEnd - currentMs) / (60 * 1000);
+
     result.set(dayStr, existing + durationMinutes);
     current = new Date(stepEnd);
   }
