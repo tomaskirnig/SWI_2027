@@ -126,7 +126,9 @@ a systémový plánovač úloh pro automatickou expiraci.
 
 **Commit / tag aplikace:**  
 Pracovní větev cvičení C02 připravená pro C03.
+- Ověřený commit implementace: `3d1c3593aa9b293f9b02dd90bfda476fe00fee13`
 
 - Datum ověření: 1. 10. 2026.
 - Příkaz: `npm run verify`.
 - Výsledek: `30 PASS`, `0 FAIL`.
+
