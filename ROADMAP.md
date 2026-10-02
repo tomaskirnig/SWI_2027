@@ -1,4 +1,4 @@
-# Plán cvičení C02 (Roadmap & Status)
+# Roadmap & Status — C02 a C03
 
 Tento dokument shrnuje stav plnění požadavků cvičení C02 a kontrolního bodu CP1 podle zadání ([zadani.txt](zadani.txt)), hotové části, zbývající úkoly a navazující kroky.
 
@@ -82,7 +82,7 @@ Byla vytvořena plně funkční a zkompilovatelná implementace rezervačního s
    - Výsledek automatizovaného ověření byl zaznamenán do
      [docs/evidence-and-evolution.md](docs/evidence-and-evolution.md).
 
-3. **Finální identifikace ověřené verze — ⏳ Zbývá**
+3. **Finální identifikace ověřené verze — ✅ Hotovo
    - Po vytvoření finálního commitu doplnit jeho hash do
      [docs/evidence-and-evolution.md](docs/evidence-and-evolution.md).
 
@@ -100,3 +100,21 @@ Byla vytvořena plně funkční a zkompilovatelná implementace rezervačního s
 - [x] **Krok 3: Spuštění, ověření a finalizace evidence**
   - Spuštění proti PostgreSQL databázi a ověření správných návratových kódů.
   - Doplnění finálního commitu do dokumentace pro uzavření C02.
+
+## C03 — Architektura a rozhodnutí
+
+### Část A — AS-IS analýza scénáře Confirm Reservation
+
+- [x] A1 — výběr a reference scénáře
+- [x] A2 — mapování hlavního průchodu na kód
+- [x] A3 — alternativní / chybová větev
+- [x] A4 — hlavní části implementace
+- [x] A5 — stav, změna stavu a business invariant
+- [x] A6 — relevantní závislosti
+- [x] A7 — AS-IS strukturální diagram
+- [ ] A8 — otázka pro další architektonický návrh
+
+**Výstup:** `docs/architecture-and-decisions.md`
+
+**Stav:** A1–A6 dokončeno. A7 má pracovní verzi a čeká na finální revizi.
+A8 bude doplněno dalším členem týmu.
