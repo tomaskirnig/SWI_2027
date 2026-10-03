@@ -329,3 +329,14 @@ strukturu implementace vzniklé v C02.
 
 ---
 
+
+
+## A8. Otázka pro další architektonický návrh
+
+| Položka | Obsah |
+|---|---|
+| **Otázka** | Jak oddělit orchestraci a business logiku potvrzení rezervace od přímého psaní SQL dotazů a nízkoúrovňové správy databázových transakcí (např. zavedením Repository vzoru a Unit of Work), aby byl kód čistě testovatelný bez nutnosti živé PostgreSQL databáze a snížila se vysoká provázanost v `Reservation Service`? |
+| **Doklad** | `src/service.ts` — funkce `confirmReservation()`, `findConflictingReservation()` a `checkDailyLimitExceeded()` přímo v sobě sestavují a provádějí raw SQL dotazy (`client.query('SELECT ... FOR UPDATE')`, `client.query('UPDATE ...')`, `BEGIN`, `COMMIT`, `ROLLBACK`), spravují klienta z poolu a současně vyhodnocují doménová pravidla a připravují outbox. Jak bylo uvedeno v sekci A4, v současné implementaci zcela chybí samostatná perzistenční vrstva (Repository). |
+| **Proč je důležitá** | V současném AS-IS stavu je doménová logika pevně svázána s konkrétním ovladačem PostgreSQL a konkrétním SQL dialektem. To brání psaní rychlých izolovaných unit testů pro business pravidla (musí se vždy spouštět proti PostgreSQL), porušuje princip jedné odpovědnosti (SRP) a činí jakoukoliv budoucí úpravu schématu či optimalizaci transakcí riskantní a náročnou na údržbu v navazujících krocích C03 a CP1. |
+
+---

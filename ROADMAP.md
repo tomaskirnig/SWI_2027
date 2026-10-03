@@ -112,9 +112,8 @@ Byla vytvořena plně funkční a zkompilovatelná implementace rezervačního s
 - [x] A5 — stav, změna stavu a business invariant
 - [x] A6 — relevantní závislosti
 - [x] A7 — AS-IS strukturální diagram
-- [ ] A8 — otázka pro další architektonický návrh
+- [x] A8 — otázka pro další architektonický návrh
 
 **Výstup:** `docs/architecture-and-decisions.md`
 
-**Stav:** A1–A6 dokončeno. A7 má pracovní verzi a čeká na finální revizi.
-A8 bude doplněno dalším členem týmu.
+**Stav:** Část A (A1–A8) kompletně dokončena v docs/architecture-and-decisions.md.
