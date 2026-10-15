@@ -148,3 +148,65 @@ a obslužná funkce/endpoint pro expiraci.
 - **Schválili:** Martin Kalus, Tomáš Kirnig, Petr Gála, Dennis Carnevale
 - **Otevřené body:** Rozsah automatického spouštění na pozadí (cron/timer) a oddělení perzistenční vrstvy (Repository) jsou otevřeny pro řešení v navazující fázi C03.
 
+---
+
+## C03 — Architecture Evidence
+
+**Baseline:** v0.2  
+**Part A:** Sledován scénář `OP-03 Confirm Reservation`, zmapován v [docs/architecture-and-decisions.md](architecture-and-decisions.md) (oddíly A1–A8).
+
+**Drivers:**
+1. *Concurrency & Exclusivity (`BR-02`, `REQ-04`, `REQ-07`):* Autoritativní rozhodnutí v transakčním zámku zabraňující souběžné dvojí alokaci.
+2. *Delayed Approval Workflow & Expiration (`REQ-10`, `REQ-13`, `BR-03`):* Přesah stavu `PENDING_APPROVAL` přes request a automatická expirace v čase `start - 1h`.
+3. *Reliability & Transactional Outbox (`REQ-06`, `BR-06`):* Nezávislost commitu rezervace na dostupnosti externí notifikační služby.
+4. *Decoupling of Domain Rules from Persistence (A8):* Oddělení orchestrace a čistých doménových pravidel od raw SQL a databázového klienta.
+
+**Decision question:**  
+Kde a jak má být vlastněn delayed approval workflow a časovač expirací nerozhodnutých žádostí?
+
+**Alternatives:**
+- *Alternativa A:* In-process modul v monolitické aplikaci s neblokujícím časovačem.
+- *Alternativa B:* Samostatný runtime worker proces / plánovač.
+
+**Scenario walkthrough:**  
+Detailně popsán v oddílu E3 pro scénář potvrzení rezervace křečka vyžadujícího schválení (*Archimedes*), následovaný nečinností správce a automatickou expirací.
+
+**ADR:**  
+`ADR-01 — Umístění a vlastnictví delayed approval workflow a časovače expirací` (přijata Alternativa A s modulárním rozhraním).
+
+**Views:**
+- *domain class:* oddíl C1 (třídní diagram doménových pojmů v Mermaid bez frameworku)
+- *context:* oddíl G1 (kontextový diagram s aktéry Student, Správce křečka a Notification Service)
+- *static architecture:* oddíl G2 (diagram komponent s explicitním vlastnictvím: `Reservation Management`, `Availability`, `Approval Workflow`, `Reservation Persistence`, `Notification Integration`)
+- *state ownership:* oddíl G3 (tabulka mapování přechodů statechartu na komponenty)
+- *runtime/deployment:* oddíl G4 (mapování komponent do Node.js procesu PID 1, napojení na PostgreSQL a Notification Service)
+- *design sequence:* oddíl H1 (návrhový sekvenční diagram pro Confirm Reservation s větví `alt` pro kolizi a větvením pro approval)
+- *focused design class:* oddíl H2 (návrhový třídní diagram s `IReservationRepository`, `PostgresReservationRepository`, `ReservationService`, `ApprovalService`)
+
+**Cross-view issues found/resolved:**  
+Vyhodnoceno 7 vazeb v oddílu I; všechny vazby C02↔G2, C2↔G2, G2↔H1, H1↔H2, statechart↔G3/H1, G2↔G4 a ADR↔G2/G4 jsou vzájemně plně konzistentní.
+
+**AS-IS → TO-BE delta:**  
+Zpracována v oddílu J; identifikovány akce `CHANGE` pro vyčlenění perzistenční vrstvy (Repository), zprovoznění in-process časovače expirací a zavedení automatického architektonického testu.
+
+**Implementation changes:**
+1. Vytvořen soubor `src/repository.ts` s rozhraním `IReservationRepository` a třídou `PostgresReservationRepository`, kam byly vyčleněny raw SQL dotazy a transakční metody.
+2. Refaktorován soubor `src/service.ts`, který deleguje databázové operace na repozitář a soustředí se na orchestraci a doménová pravidla.
+3. Upraven soubor `src/app.ts`, ze kterého byl odstraněn přímý import `pool` i raw SQL dotazy (volá výhradně service a repository rozhraní).
+4. V `src/index.ts` byl zprovozněn in-process neblokující plánovač expirací `startExpiryScheduler()` s recovery při startu serveru (`runExpiryCheck()`).
+5. Vytvořen soubor `src/arch.test.ts` a přidán npm skript `test:arch`.
+
+**Behaviour verification:**
+- Příkaz: `npm run verify`
+- Výsledek: `30 PASS`, `0 FAIL` (všech 30 integračních a doménových scénářů V-01 až V-26 prošlo úspěšně se striktními assertions).
+
+**Architecture conformance rule + result:**
+- *Architektonické pravidlo:* Žádný kontroler (`src/app.ts`) ani doménová logika (`src/domain.ts`) nesmí přímo importovat databázový ovladač `pg` ani db pool; perzistence je izolována v `src/repository.ts`. Doména `src/domain.ts` obsahuje pouze čisté funkce bez infrastruktury.
+- *Kontrola:* `npm run test:arch` (automatický skript `src/arch.test.ts`)
+- *Výsledek:* `ARCH-01 PASS`, `ARCH-02 PASS`, `ARCH-03 PASS`.
+
+**Remaining uncertainty / risk:**  
+V případě budoucího horizontálního škálování Node.js aplikace na více instancí bude nutné in-process timer doplnit o distribuovaný zámek (např. `pg_advisory_lock`) nebo vyčlenit do samostatného cron workeru (Alternativa B z ADR-01).
+
+**Commit / tag:**  
+Pracovní větev `C03`, připraveno pro odevzdání cvičení C03.

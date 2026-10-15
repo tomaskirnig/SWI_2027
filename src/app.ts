@@ -7,8 +7,10 @@ import {
   cancelReservation,
   decideReservation,
   expirePendingReservations,
+  getHamsters,
+  getReservations,
+  getReservationById,
 } from './service';
-import { pool } from './db';
 
 export const app = express();
 
@@ -33,8 +35,8 @@ function getEffectiveTime(req: Request): Date {
 // --------------------------------------------------------------------------
 app.get('/api/hamsters', async (req: Request, res: Response) => {
   try {
-    const result = await pool.query('SELECT * FROM hamsters ORDER BY name ASC');
-    res.json(result.rows);
+    const hamsters = await getHamsters();
+    res.json(hamsters);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -90,19 +92,11 @@ app.post('/api/reservations', async (req: Request, res: Response) => {
 app.get('/api/reservations', async (req: Request, res: Response) => {
   try {
     const { user_id, status } = req.query;
-    let query = 'SELECT * FROM reservations WHERE 1=1';
-    const params: any[] = [];
-    if (user_id) {
-      params.push(user_id);
-      query += ` AND user_id = $${params.length}`;
-    }
-    if (status) {
-      params.push(status);
-      query += ` AND status = $${params.length}`;
-    }
-    query += ' ORDER BY start_time DESC';
-    const result = await pool.query(query, params);
-    res.json(result.rows);
+    const reservations = await getReservations(
+      user_id ? String(user_id) : undefined,
+      status ? String(status) : undefined
+    );
+    res.json(reservations);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -114,11 +108,11 @@ app.get('/api/reservations', async (req: Request, res: Response) => {
 app.get('/api/reservations/:id', async (req: Request, res: Response) => {
   try {
     const id = parseInt(String(req.params.id), 10);
-    const result = await pool.query('SELECT * FROM reservations WHERE id = $1', [id]);
-    if (result.rows.length === 0) {
+    const reservation = await getReservationById(id);
+    if (!reservation) {
       return res.status(404).json({ error: `Rezervace ID ${id} nebyla nalezena.` });
     }
-    res.json(result.rows[0]);
+    res.json(reservation);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

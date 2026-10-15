@@ -1,7 +1,6 @@
 import { PoolClient } from 'pg';
 import { pool } from './db';
 import { sendNotification } from './notification';
-
 import {
   ReservationStatus,
   isIntervalValid,
@@ -13,23 +12,15 @@ import {
   MAX_DAILY_MINUTES,
   ONE_HOUR_MS,
 } from './domain';
+import {
+  repository,
+  ReservationRow,
+  HamsterRow,
+  OutboxRow,
+  DbExecutor,
+} from './repository';
 
-export interface ReservationRow {
-  id: number;
-  user_id: string;
-  hamster_id: string;
-  start_time: Date;
-  end_time: Date;
-  status: ReservationStatus;
-  created_at: Date;
-}
-
-export interface HamsterRow {
-  id: string;
-  name: string;
-  is_active: boolean;
-  requires_approval: boolean;
-}
+export { ReservationRow, HamsterRow, OutboxRow };
 
 /**
  * Inicializace databázového schématu a výchozích dat
@@ -70,9 +61,9 @@ export async function initializeDatabase(): Promise<void> {
   await pool.query(`
     INSERT INTO hamsters (id, name, is_active, requires_approval)
     VALUES 
-      ('ferda', 'Školní křeček Ferda', true, false),
-      ('archimedes', 'Speciální křeček Archimedes', true, true),
-      ('spavek', 'Spící křeček Spávek', false, false)
+      ('ferda', 'Ferda', true, false),
+      ('archimedes', 'Archimedes', true, true),
+      ('spavek', 'Spávek', false, false)
     ON CONFLICT (id) DO UPDATE SET
       name = EXCLUDED.name,
       is_active = EXCLUDED.is_active,
@@ -81,38 +72,42 @@ export async function initializeDatabase(): Promise<void> {
 }
 
 /**
+ * Získání seznamu křečků z katalogu
+ */
+export async function getHamsters(): Promise<HamsterRow[]> {
+  return await repository.getAllHamsters();
+}
+
+/**
+ * Získání seznamu rezervací (s volitelným filtrem)
+ */
+export async function getReservations(userId?: string, status?: string): Promise<ReservationRow[]> {
+  return await repository.getReservations(userId, status);
+}
+
+/**
+ * Získání detailu rezervace podle ID
+ */
+export async function getReservationById(id: number): Promise<ReservationRow | null> {
+  return await repository.findReservationById(pool, id);
+}
+
+/**
  * Pomocná funkce pro ověření denního limitu studenta pro konkrétního křečka
  */
 async function checkDailyLimitExceeded(
-  client: PoolClient | typeof pool,
+  executor: DbExecutor,
   userId: string,
   hamsterId: string,
   newStart: Date,
   newEnd: Date,
   excludeReservationId?: number
 ): Promise<{ exceeded: boolean; day?: string; currentMinutes?: number; requestedMinutes?: number }> {
-  // Spočteme minuty nového požadavku rozpadlé po dnech
   const requestedMinutesMap = calculateMinutesPerDay(newStart, newEnd);
+  const rows = await repository.findUserReservationsForHamster(executor, userId, hamsterId, excludeReservationId);
 
-  // Načteme existující rezervace ve stavech čerpajících limit (CONFIRMED, PENDING_APPROVAL)
-  let query = `
-    SELECT id, start_time, end_time, status 
-    FROM reservations 
-    WHERE user_id = $1 AND hamster_id = $2 
-      AND status IN ('CONFIRMED', 'PENDING_APPROVAL')
-  `;
-  const params: any[] = [userId, hamsterId];
-
-  if (excludeReservationId) {
-    query += ' AND id != $3';
-    params.push(excludeReservationId);
-  }
-
-  const res = await client.query(query, params);
-
-  // Spočítáme existující minuty po dnech
   const existingMinutesMap = new Map<string, number>();
-  for (const row of res.rows) {
+  for (const row of rows) {
     const rowStart = new Date(row.start_time);
     const rowEnd = new Date(row.end_time);
     const rowMap = calculateMinutesPerDay(rowStart, rowEnd);
@@ -122,7 +117,6 @@ async function checkDailyLimitExceeded(
     }
   }
 
-  // Zkontrolujeme každý den nového požadavku
   for (const [day, requestedMins] of requestedMinutesMap.entries()) {
     const existingMins = existingMinutesMap.get(day) || 0;
     if (existingMins + requestedMins > MAX_DAILY_MINUTES) {
@@ -142,31 +136,19 @@ async function checkDailyLimitExceeded(
  * Pomocná funkce pro ověření kolize překryvu (BR-02)
  */
 async function findConflictingReservation(
-  client: PoolClient | typeof pool,
+  executor: DbExecutor,
   hamsterId: string,
   start: Date,
   end: Date,
   excludeReservationId?: number
 ): Promise<ReservationRow | null> {
-  let query = `
-    SELECT * FROM reservations 
-    WHERE hamster_id = $1 
-      AND status IN ('CONFIRMED', 'PENDING_APPROVAL')
-  `;
-  const params: any[] = [hamsterId];
+  const rows = await repository.findActiveReservationsForHamster(executor, hamsterId, excludeReservationId);
 
-  if (excludeReservationId) {
-    query += ' AND id != $2';
-    params.push(excludeReservationId);
-  }
-
-  const res = await client.query(query, params);
-
-  for (const row of res.rows) {
+  for (const row of rows) {
     const rowStart = new Date(row.start_time);
     const rowEnd = new Date(row.end_time);
     if (doIntervalsOverlap(start, end, rowStart, rowEnd)) {
-      return row as ReservationRow;
+      return row;
     }
   }
 
@@ -193,11 +175,10 @@ export async function createReservation(
     throw { status: 400, message: 'Rezervaci lze vytvořit nejpozději 15 minut před začátkem (currentTime <= start - 15 min).' };
   }
 
-  const hamsterRes = await pool.query('SELECT * FROM hamsters WHERE id = $1', [hamsterId]);
-  if (hamsterRes.rows.length === 0) {
+  const hamster = await repository.findHamsterById(pool, hamsterId);
+  if (!hamster) {
     throw { status: 404, message: `Křeček '${hamsterId}' nebyl nalezen v katalogu.` };
   }
-  const hamster = hamsterRes.rows[0] as HamsterRow;
   if (!hamster.is_active) {
     throw { status: 400, message: `Křeček '${hamster.name}' není aktivní a nelze jej rezervovat.` };
   }
@@ -217,15 +198,8 @@ export async function createReservation(
     };
   }
 
-  // Vytvoření DRAFTu
-  const insertRes = await pool.query(
-    `INSERT INTO reservations (user_id, hamster_id, start_time, end_time, status)
-     VALUES ($1, $2, $3, $4, 'DRAFT')
-     RETURNING *`,
-    [userId, hamsterId, start, end]
-  );
-
-  return insertRes.rows[0] as ReservationRow;
+  // Vytvoření DRAFTu přes repository
+  return await repository.insertReservation(userId, hamsterId, start, end, 'DRAFT');
 }
 
 // --------------------------------------------------------------------------
@@ -240,25 +214,27 @@ export async function checkAvailability(
     throw { status: 400, message: 'Neplatný interval dotazu: start musí být menší než end.' };
   }
 
-  const hamsterRes = await pool.query('SELECT * FROM hamsters WHERE id = $1', [hamsterId]);
-  if (hamsterRes.rows.length === 0) {
+  const hamster = await repository.findHamsterById(pool, hamsterId);
+  if (!hamster) {
     throw { status: 404, message: `Křeček '${hamsterId}' neexistuje.` };
   }
-  const hamster = hamsterRes.rows[0] as HamsterRow;
   if (!hamster.is_active) {
     return { available: false, reason: 'Křeček není aktivní.' };
   }
 
   const conflict = await findConflictingReservation(pool, hamsterId, start, end);
   if (conflict) {
-    return { available: false, reason: `Křeček je obsazen rezervací ID ${conflict.id} (${conflict.status}).` };
+    return {
+      available: false,
+      reason: `Termín je obsazen rezervací ID ${conflict.id} (${conflict.status}).`,
+    };
   }
 
   return { available: true };
 }
 
 // --------------------------------------------------------------------------
-// OP-03: Confirm Reservation (včetně podpory Baseline v0.2 schvalování)
+// OP-03: Confirm Reservation
 // --------------------------------------------------------------------------
 export async function confirmReservation(
   reservationId: number,
@@ -270,16 +246,10 @@ export async function confirmReservation(
   try {
     await client.query('BEGIN');
 
-    // Uzamkneme řádek rezervace pro ochranu proti souběhu (REQ-07)
-    const resResult = await client.query(
-      'SELECT * FROM reservations WHERE id = $1 FOR UPDATE',
-      [reservationId]
-    );
-
-    if (resResult.rows.length === 0) {
+    const reservation = await repository.findReservationByIdForUpdate(client, reservationId);
+    if (!reservation) {
       throw { status: 404, message: `Rezervace ID ${reservationId} neexistuje.` };
     }
-    const reservation = resResult.rows[0] as ReservationRow;
 
     if (reservation.user_id !== userId) {
       throw { status: 403, message: 'K této rezervaci nemá student oprávnění.' };
@@ -301,10 +271,9 @@ export async function confirmReservation(
     }
 
     // Kontrola křečka
-    const hamsterRes = await client.query('SELECT * FROM hamsters WHERE id = $1 FOR UPDATE', [reservation.hamster_id]);
-    const hamster = hamsterRes.rows[0] as HamsterRow;
-    if (!hamster.is_active) {
-      throw { status: 400, message: `Křeček '${hamster.name}' není aktivní.` };
+    const hamster = await repository.findHamsterByIdForUpdate(client, reservation.hamster_id);
+    if (!hamster || !hamster.is_active) {
+      throw { status: 400, message: `Křeček '${hamster ? hamster.name : reservation.hamster_id}' není aktivní.` };
     }
 
     // Transakční kontrola kolize (BR-02 / REQ-07)
@@ -325,35 +294,21 @@ export async function confirmReservation(
     // Baseline v0.2 větvení: Vyžaduje schválení správcem křečka?
     const targetStatus: ReservationStatus = hamster.requires_approval ? 'PENDING_APPROVAL' : 'CONFIRMED';
 
-    await client.query(
-      'UPDATE reservations SET status = $1 WHERE id = $2',
-      [targetStatus, reservationId]
-    );
+    await repository.updateReservationStatus(client, reservationId, targetStatus);
 
     // Outbox záznam o notifikaci (BR-06)
     const notifMsg = targetStatus === 'CONFIRMED'
       ? `Rezervace ID ${reservationId} byla úspěšně potvrzena.`
       : `Žádost o rezervaci ID ${reservationId} čeká na schválení správcem křečka.`;
 
-    const notificationResult = await client.query(
-      `INSERT INTO notifications_outbox
-        (reservation_id, recipient, message)
-      VALUES ($1, $2, $3)
-      RETURNING id`,
-      [reservationId, userId, notifMsg]
-    );
-
-    const notificationId = notificationResult.rows[0].id;
+    const notificationId = await repository.insertOutboxNotification(client, reservationId, userId, notifMsg);
 
     if (targetStatus === 'PENDING_APPROVAL') {
-      await client.query(
-        `INSERT INTO notifications_outbox (reservation_id, recipient, message)
-        VALUES ($1, $2, $3)`,
-        [
-          reservationId,
-          `spravce:${reservation.hamster_id}`,
-          `Rezervace ID ${reservationId} čeká na vaše schválení.`
-        ]
+      await repository.insertOutboxNotification(
+        client,
+        reservationId,
+        `spravce:${reservation.hamster_id}`,
+        `Rezervace ID ${reservationId} čeká na vaše schválení.`
       );
     }
 
@@ -363,23 +318,10 @@ export async function confirmReservation(
 
     try {
       await sendNotification(userId, notifMsg);
-
-      await pool.query(
-        `UPDATE notifications_outbox
-        SET status = 'SENT'
-        WHERE id = $1`,
-        [notificationId]
-      );
+      await repository.updateOutboxStatus(notificationId, 'SENT');
     } catch {
-      warning =
-        'Oznámení se nepodařilo doručit a zůstává evidované pro pozdější opakování.';
-
-      await pool.query(
-        `UPDATE notifications_outbox
-        SET status = 'FAILED'
-        WHERE id = $1`,
-        [notificationId]
-      );
+      warning = 'Oznámení se nepodařilo doručit a zůstává evidované pro pozdější opakování.';
+      await repository.updateOutboxStatus(notificationId, 'FAILED');
     }
 
     return {
@@ -411,15 +353,10 @@ export async function cancelReservation(
   try {
     await client.query('BEGIN');
 
-    const resResult = await client.query(
-      'SELECT * FROM reservations WHERE id = $1 FOR UPDATE',
-      [reservationId]
-    );
-
-    if (resResult.rows.length === 0) {
+    const reservation = await repository.findReservationByIdForUpdate(client, reservationId);
+    if (!reservation) {
       throw { status: 404, message: `Rezervace ID ${reservationId} neexistuje.` };
     }
-    const reservation = resResult.rows[0] as ReservationRow;
 
     if (reservation.user_id !== userId) {
       throw { status: 403, message: 'K této rezervaci nemá student oprávnění.' };
@@ -449,57 +386,29 @@ export async function cancelReservation(
       };
     }
 
-    await client.query(
-      'UPDATE reservations SET status = $1 WHERE id = $2',
-      ['CANCELLED', reservationId]
-    );
+    await repository.updateReservationStatus(client, reservationId, 'CANCELLED');
 
-    const notifMsg =
-  `Rezervace ID ${reservationId} byla zrušena.`;
+    const notifMsg = `Rezervace ID ${reservationId} byla zrušena.`;
+    const notificationId = await repository.insertOutboxNotification(client, reservationId, userId, notifMsg);
 
-const notificationResult = await client.query(
-  `INSERT INTO notifications_outbox
-     (reservation_id, recipient, message)
-   VALUES ($1, $2, $3)
-   RETURNING id`,
-  [reservationId, userId, notifMsg]
-);
+    await client.query('COMMIT');
 
-  const notificationId = notificationResult.rows[0].id;
+    let warning: string | undefined;
 
-  await client.query('COMMIT');
+    try {
+      await sendNotification(userId, notifMsg);
+      await repository.updateOutboxStatus(notificationId, 'SENT');
+    } catch {
+      warning = 'Oznámení se nepodařilo doručit a zůstává evidované pro pozdější opakování.';
+      await repository.updateOutboxStatus(notificationId, 'FAILED');
+    }
 
-  let warning: string | undefined;
-
-  try {
-    await sendNotification(userId, notifMsg);
-
-    await pool.query(
-      `UPDATE notifications_outbox
-      SET status = 'SENT'
-      WHERE id = $1`,
-      [notificationId]
-    );
-  } catch {
-    warning =
-      'Oznámení se nepodařilo doručit a zůstává evidované pro pozdější opakování.';
-
-    await pool.query(
-      `UPDATE notifications_outbox
-      SET status = 'FAILED'
-      WHERE id = $1`,
-      [notificationId]
-    );
-  }
-
-  return {
-    id: reservationId,
-    status: 'CANCELLED',
-    idempotent: false,
-    message:
-      `Rezervace ID ${reservationId} byla úspěšně zrušena a uvolnila alokaci i limit.`,
-    warning,
-  };
+    return {
+      id: reservationId,
+      status: 'CANCELLED',
+      message: `Rezervace ID ${reservationId} byla úspěšně zrušena a uvolnila alokaci i limit.`,
+      warning,
+    };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -527,65 +436,44 @@ export async function decideReservation(
   try {
     await client.query('BEGIN');
 
-    const resResult = await client.query(
-      'SELECT * FROM reservations WHERE id = $1 FOR UPDATE',
-      [reservationId]
-    );
-
-    if (resResult.rows.length === 0) {
+    const reservation = await repository.findReservationByIdForUpdate(client, reservationId);
+    if (!reservation) {
       throw { status: 404, message: `Rezervace ID ${reservationId} neexistuje.` };
     }
-    const reservation = resResult.rows[0] as ReservationRow;
 
     if (reservation.status !== 'PENDING_APPROVAL') {
       throw { status: 400, message: `Rezervace není ve stavu PENDING_APPROVAL (její stav je ${reservation.status}).` };
     }
 
     const start = new Date(reservation.start_time);
-   if (now.getTime() >= start.getTime() - ONE_HOUR_MS) {
+    if (now.getTime() >= start.getTime() - ONE_HOUR_MS) {
       throw {
         status: 400,
-        message: 'Lhůta pro rozhodnutí správce již vypršela; žádost má být expirována.'
+        message: 'Lhůta pro rozhodnutí správce již vypršela; žádost má být expirována.',
       };
     }
 
-    const hamsterRes = await client.query(
-      'SELECT * FROM hamsters WHERE id = $1 FOR UPDATE',
-      [reservation.hamster_id]
-    );
-
-    if (hamsterRes.rows.length === 0) {
-      throw {
-        status: 404,
-        message: `Křeček '${reservation.hamster_id}' neexistuje.`
-      };
+    const hamster = await repository.findHamsterByIdForUpdate(client, reservation.hamster_id);
+    if (!hamster) {
+      throw { status: 404, message: `Křeček '${reservation.hamster_id}' neexistuje.` };
     }
-
-    const hamster = hamsterRes.rows[0] as HamsterRow;
 
     if (decision === 'APPROVE' && !hamster.is_active) {
       throw {
         status: 400,
-        message: `Křeček '${hamster.name}' není aktivní a žádost nelze schválit.`
+        message: `Křeček '${hamster.name}' není aktivní a žádost nelze schválit.`,
       };
     }
 
     const newStatus: ReservationStatus = decision === 'APPROVE' ? 'CONFIRMED' : 'REJECTED';
 
-    await client.query(
-      'UPDATE reservations SET status = $1 WHERE id = $2',
-      [newStatus, reservationId]
-    );
+    await repository.updateReservationStatus(client, reservationId, newStatus);
 
     const msg = decision === 'APPROVE'
       ? `Vaše žádost o rezervaci ID ${reservationId} byla správcem křečka schválena.`
       : `Vaše žádost o rezervaci ID ${reservationId} byla správcem křečka zamítnuta.`;
 
-    await client.query(
-      `INSERT INTO notifications_outbox (reservation_id, recipient, message)
-       VALUES ($1, $2, $3)`,
-      [reservationId, reservation.user_id, msg]
-    );
+    await repository.insertOutboxNotification(client, reservationId, reservation.user_id, msg);
 
     await client.query('COMMIT');
 
@@ -612,33 +500,25 @@ export async function expirePendingReservations(now: Date = new Date()) {
   try {
     await client.query('BEGIN');
 
-    // Najdeme všechny PENDING_APPROVAL rezervace, kde do začátku zbývá méně než 1 hodina (currentTime >= start - 1h)
+    // Najdeme všechny PENDING_APPROVAL rezervace, kde do začátku zbývá nejvýše 1 hodina (currentTime >= start - 1h)
     const thresholdTime = new Date(now.getTime() + ONE_HOUR_MS);
-
-    const res = await client.query(
-      `SELECT * FROM reservations 
-       WHERE status = 'PENDING_APPROVAL' AND start_time <= $1
-       FOR UPDATE`,
-      [thresholdTime]
-    );
+    const expiredRows = await repository.findPendingReservationsBeforeTime(thresholdTime);
 
     const expiredIds: number[] = [];
 
-    for (const row of res.rows) {
-      await client.query('UPDATE reservations SET status = $1 WHERE id = $2', ['EXPIRED', row.id]);
-      await client.query(
-        `INSERT INTO notifications_outbox (reservation_id, recipient, message)
-         VALUES ($1, $2, $3)`,
-        [row.id, row.user_id, `Žádost o rezervaci ID ${row.id} expirovala z důvodu nečinnosti správce.`]
+    for (const row of expiredRows) {
+      await repository.updateReservationStatus(client, row.id, 'EXPIRED');
+      await repository.insertOutboxNotification(
+        client,
+        row.id,
+        row.user_id,
+        `Žádost o rezervaci ID ${row.id} expirovala z důvodu nečinnosti správce.`
       );
-      await client.query(
-       `INSERT INTO notifications_outbox (reservation_id, recipient, message)
-        VALUES ($1, $2, $3)`,
-        [
-          row.id,
-          `spravce:${row.hamster_id}`,
-          `Žádost o rezervaci ID ${row.id} expirovala bez rozhodnutí.`
-        ]
+      await repository.insertOutboxNotification(
+        client,
+        row.id,
+        `spravce:${row.hamster_id}`,
+        `Žádost o rezervaci ID ${row.id} expirovala bez rozhodnutí.`
       );
 
       expiredIds.push(row.id);

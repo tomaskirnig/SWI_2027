@@ -8,6 +8,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "verify": "tsx src/verify.ts",
+    "test:arch": "tsx src/arch.test.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "spike": "tsc && node dist/spike.js"
   },
