@@ -1,0 +1,859 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SWI C03 Architecture</title>
+<style>
+:root{--bg:#f7f8fb;--paper:#fff;--ink:#182230;--line:#d7dde7;--accent:#2859d6;--accent2:#eef3ff;--diagram:#f3f6fa}
+*{box-sizing:border-box}body{font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--ink);margin:0;line-height:1.58}
+main{max-width:1120px;margin:auto;padding:22px 36px 100px}.langbar{position:sticky;top:0;z-index:10;background:rgba(247,248,251,.96);padding:12px 0;border-bottom:1px solid var(--line)}
+button{font:inherit;padding:8px 16px;border-radius:8px;border:1px solid var(--line);background:white;cursor:pointer;margin-right:6px}button.active{background:var(--accent);color:white}
+h1{font-size:2.3rem}h2{font-size:1.55rem;margin-top:2.25rem;border-top:1px solid var(--line);padding-top:1rem}h3{font-size:1.15rem;margin-top:1.4rem}
+blockquote{background:var(--accent2);border-left:5px solid var(--accent);padding:12px 18px}.diagram{background:var(--diagram);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:14px 0 20px;overflow:auto}
+.diagram pre{margin:0;background:transparent;color:var(--ink);font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.94rem;line-height:1.42}
+code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:#edf0f5;padding:.08em .3em;border-radius:4px}.table-wrap{overflow:auto;margin:12px 0 22px}
+table{border-collapse:collapse;width:100%;background:var(--paper)}th,td{border:1px solid var(--line);padding:9px 11px;vertical-align:top;text-align:left}th{background:#edf2fb}
+li{margin:.35rem 0}.checks{list-style:"☐  "}hr{border:0;border-top:2px solid var(--line);margin:46px 0}.en{display:none}
+</style>
+<script>function setLang(x){document.querySelector('.cz').style.display=x==='cz'?'block':'none';document.querySelector('.en').style.display=x==='en'?'block':'none';document.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.lang===x));}</script>
+</head><body onload="setLang('cz')"><main><div class="langbar"><button data-lang="cz" onclick="setLang('cz')">CZ</button><button data-lang="en" onclick="setLang('en')">EN</button></div><section class="cz"><h1>CZ</h1>
+<h2>SWI C03 — Architecture</h2>
+<h3>Od AS-IS implementace k přijaté architektuře</h3>
+<h2>Cíl</h2>
+<p>Navrhnout a zdůvodnit architekturu pro vybranou část systému, propojit ji s požadavky a scénáři z C02 a ověřit, že ji implementace skutečně dodržuje.</p>
+<h2>V tomto průchodu se naučíte</h2>
+<ul>
+<li>odvodit architektonicky významné problémy a drivery z požadavků a evidence;</li>
+<li>rozlišit doménové pojmy, odpovědnosti a jejich implementační umístění;</li>
+<li>určit, které odpovědnosti a stav musí mít jasného vlastníka;</li>
+<li>formulovat konkrétní architektonickou rozhodovací otázku;</li>
+<li>vytvořit a porovnat více reálných architektonických alternativ;</li>
+<li>ověřit alternativy na stejném scénáři, včetně failure / concurrency situace;</li>
+<li>zaznamenat rozhodnutí a jeho důsledky pomocí ADR;</li>
+<li>vytvořit konzistentní strukturální, dynamické a runtime pohledy na architekturu;</li>
+<li>realizovat scénář pomocí sekvenčního a návrhového třídního diagramu;</li>
+<li>kontrolovat konzistenci mezi požadavky, diagramy, rozhodnutími a kódem;</li>
+<li>porovnat AS-IS implementaci s přijatou TO-BE architekturou;</li>
+<li>řízeně upravit implementaci pouze tam, kde je to potřeba;</li>
+<li>ověřit nejen funkční chování, ale i dodržení konkrétního architektonického pravidla.</li>
+</ul>
+<p>Použijte:</p>
+<ul>
+<li>Specification Baseline v0.2;</li>
+<li>scénáře, pravidla/invarianty a statechart z C02;</li>
+<li>ověřovací příklady z C02;</li>
+<li>běžící aplikaci;</li>
+<li>drivery přenesené z C02;</li>
+<li>Část A — zmapování současné implementace.</li>
+</ul>
+<p>Pokud jste Část A udělali v úterý, použijte ji jako hotový AS-IS podklad. Aktualizujte pouze položky, které jste od té doby skutečně změnili v kódu.</p>
+<h3>Postup C03</h3>
+<div class='diagram'><pre>AS-IS evidence
+    ↓
+drivers
+    ↓
+domain + responsibilities
+    ↓
+decision question
+    ↓
+alternatives
+    ↓
+evaluate alternatives with drivers + scenario
+    ↓
+ADR
+    ↓
+TO-BE architecture
+    ↓
+scenario realization
+    ↓
+AS-IS → TO-BE delta
+    ↓
+implementation
+    ↓
+behaviour + architecture verification</pre></div>
+<hr>
+<h2>B. Zpřesněte 3–5 architektonických driverů</h2>
+<p>Začněte drivery z C02. Přidejte další pouze tehdy, pokud vyplývají z požadavků, omezení nebo z nálezů v Části A.</p>
+<p>Pro každý driver vyplňte:</p>
+<div class='table-wrap'><table><thead><tr><th>Podklad / zdroj</th><th>Proč ovlivňuje architekturu</th><th>Otázka, kterou musí architektura vyřešit</th></tr></thead>
+<tbody>
+<tr><td><code>BR-02</code>, <code>REQ-04</code>, Part A</td><td>dva souběžné requesty mohou oba vidět „bez konfliktu“</td><td>kde se musí udělat autoritativní confirmation decision, aby <code>BR-02</code> zůstalo pravdivé?</td></tr>
+<tr><td>approval může přijít později</td><td>stav musí přežít konec původního requestu</td><td>kdo vlastní pending approval state a kdo provede pozdější transition?</td></tr>
+<tr><td><code>Notification Service</code> může selhat</td><td>business změna může být uložená dříve než notifikace</td><td>má failure notifikace změnit výsledek confirmation a kdo řeší retry?</td></tr>
+</tbody>
+</table></div>
+<p><strong>Driver není řešení.</strong> <code>transaction</code>, <code>event bus</code>, <code>microservice</code>, <code>repository pattern</code> apod. jsou možné mechanismy/řešení.</p>
+<hr>
+<h2>C1. Upravte doménový třídní model</h2>
+<p>Pokud už doménový model máte, použijte jej a upravte pouze relevantní část.</p>
+<p>Model má obsahovat typicky <strong>4–10 doménových pojmů</strong> relevantních pro zvolený scénář a drivery.</p>
+<p>Ukažte:</p>
+<ul>
+<li>pojmy, např. <code>Reservation</code>, <code>Resource</code>, <code>User</code>, <code>Approval</code>, <code>TimeInterval</code>;</li>
+<li>vztahy;</li>
+<li>násobnosti, pokud mají business význam;</li>
+<li>významné omezení/invariant, pokud patří k vztahu.</li>
+</ul>
+<p>Do doménového modelu nedávejte <code>Controller</code>, <code>Repository</code>, HTTP klienty ani frameworkové třídy.</p>
+<hr>
+<h2>C2. Určete odpovědnosti systému</h2>
+<p>Použijte stejný scénář z C02, jeho pravidla a drivery z B.</p>
+<p>Zapište všechny významné odpovědnosti pro tento slice; typicky jich bude <strong>5–8</strong>.</p>
+<div class='table-wrap'><table><thead><tr><th>Zdroj</th><th>Odpovědnost</th><th>Co musí rozhodovat / vlastnit</th><th>Potřebuje jednoho jasného vlastníka?</th><th>Důvod</th></tr></thead>
+<tbody>
+<tr><td>Confirm + statechart</td><td>rozhodnout, zda je confirmation povolená</td><td>lifecycle transition</td><td>ano</td><td>různé části nesmí rozhodnout odlišně</td></tr>
+<tr><td><code>BR-02</code></td><td>vyhodnotit konflikt a zachovat invariant</td><td>confirmation decision při konfliktu</td><td>ano</td><td>souběh nesmí porušit invariant</td></tr>
+<tr><td>approval change</td><td>spravovat pending approval</td><td>approve/reject/expire state</td><td>ano</td><td>stav přežívá request</td></tr>
+<tr><td>notification</td><td>doručit notification</td><td>delivery/retry</td><td>podle návrhu</td><td>externí failure nesmí být nejasný</td></tr>
+</tbody>
+</table></div>
+<p>Potom u každé odpovědnosti doplňte:</p>
+<ul>
+<li>s čím <strong>musí být seskupena</strong>, protože sdílí stav/invariant;</li>
+<li>od čeho <strong>má být oddělena</strong>, protože má jiný důvod změny, failure/trust boundary nebo externí technologii.</li>
+</ul>
+<p>V této části ještě neurčujte názvy komponent.</p>
+<hr>
+<h2>D. Formulujte jednu hlavní rozhodovací otázku</h2>
+<p>Vyberte jednu otázku, která:</p>
+<ul>
+<li>vychází z driveru;</li>
+<li>má dopad na strukturu/ownership/interakci/runtime;</li>
+<li>má alespoň dvě reálné varianty řešení.</li>
+</ul>
+<p>Příklady:</p>
+<ul>
+<li>Kde má být vlastněn delayed approval workflow?</li>
+<li>Kde má být provedeno confirmation decision tak, aby při souběhu platilo <code>BR-02</code>?</li>
+<li>Kde má být izolovaná integrace s <code>Notification Service</code> a co znamená její failure pro <code>Confirm Reservation</code>?</li>
+</ul>
+<p>Zapište:</p>
+<div class='diagram'><pre>Rozhodovací otázka:</pre></div>
+<hr>
+<h2>E1. Navrhněte dvě materiálně odlišné alternativy</h2>
+<p>Pro stejnou rozhodovací otázku vytvořte <strong>dvě malé strukturální varianty</strong>.</p>
+<p>Každá varianta má ukázat pouze prvky potřebné k vysvětlení rozdílu.</p>
+<p>Příklad otázky: <em>Kde má být vlastněn approval workflow?</em></p>
+<div class='diagram'><pre>Alternativa A — stejný deployable
+
+[Reservation Application]
+  ├─ [Reservation]
+  └─ [Approval Workflow]</pre></div>
+<div class='diagram'><pre>Alternativa B — samostatný runtime prvek
+
+[Reservation Application]
+          |
+          v
+[Approval Worker / Service]</pre></div>
+<hr>
+<h2>E2. Porovnejte alternativy vůči driverům</h2>
+<p>Vyberte <strong>3–5 kritérií přímo z vašich driverů</strong>.</p>
+<div class='table-wrap'><table><thead><tr><th>Driver / kritérium</th><th>Alternativa A</th><th>Alternativa B</th></tr></thead>
+<tbody>
+<tr><td>konzistence</td><td>konkrétní důsledek</td><td>konkrétní důsledek</td></tr>
+<tr><td>failure behaviour</td><td>...</td><td>...</td></tr>
+<tr><td>změna / ownership</td><td>...</td><td>...</td></tr>
+<tr><td>provozní složitost</td><td>...</td><td>...</td></tr>
+</tbody>
+</table></div>
+<p>Nedávejte body bez vysvětlení. Do buněk napište konkrétní technický důsledek.</p>
+<hr>
+<h2>E3. Prožeňte obě alternativy jedním významným scénářem</h2>
+<p>Použijte stejný scénář z C02 a jednu významnou komplikaci: failure, concurrency nebo delayed response.</p>
+<p>Nevytvářejte dva detailní sequence diagramy. Stačí tabulka:</p>
+<div class='table-wrap'><table><thead><tr><th>Krok / událost</th><th>Alternativa A</th><th>Alternativa B</th></tr></thead>
+<tbody>
+<tr><td><code>Confirm Reservation</code> začne</td><td>...</td><td>...</td></tr>
+<tr><td>je potřeba approval</td><td>...</td><td>...</td></tr>
+<tr><td>proces/request skončí</td><td>...</td><td>...</td></tr>
+<tr><td>approval přijde později</td><td>...</td><td>...</td></tr>
+<tr><td>relevantní failure/concurrency</td><td>...</td><td>...</td></tr>
+</tbody>
+</table></div>
+<p>Cíl: ověřit, že obě varianty skutečně umí realizovat požadované chování a odhalit rozdílné důsledky.</p>
+<hr>
+<h2>F. Zapište ADR</h2>
+<p>Po porovnání a scenario walkthrough zapište:</p>
+<div class='diagram'><pre>## ADR-xx — &lt;rozhodovací otázka&gt;
+
+Kontext:
+Drivery:
+Alternativa A:
+Alternativa B:
+Rozhodnutí:
+Důvod:
+Přijaté negativní důsledky:
+Rozhodnutí znovu otevřeme, když:</pre></div>
+<hr>
+<h2>G1. Nakreslete kontext systému</h2>
+<p>Nakreslete jeden <strong>context diagram</strong>.</p>
+<p>Postup:</p>
+<ol>
+<li><code>Reservation System</code> = jeden blok.</li>
+<li>Kolem něj pouze skuteční externí aktéři/systémy relevantní pro projekt.</li>
+<li>Každou vazbu popište informací/commandem, který přes hranici prochází.</li>
+<li>Interní komponenty sem nedávejte.</li>
+</ol>
+<p>Příklad:</p>
+<div class='diagram'><pre>[User / Approver]
+      | reservation commands / approval
+      v
++----------------------+
+|  Reservation System  |
++----------------------+
+     | identity claims
+     +----------------------&gt; [IdP]
+
+     | notification request
+     +----------------------&gt; [Notification Service]</pre></div>
+<hr>
+<h2>G2. Nakreslete TO-BE statickou architekturu</h2>
+<p>Použijte UML Component Diagram, blokové schéma nebo jinou rovnocennou strukturální notaci.</p>
+<h3>Postup</h3>
+<ol>
+<li>Vezměte odpovědnosti z C2.</li>
+<li>Seskupte je do <strong>3–8 logických architektonických prvků</strong>.</li>
+<li>Každý prvek musí mít:</li>
+</ol>
+<p>   - název;</p>
+<p>   - hlavní odpovědnost;</p>
+<p>   - <code>owns: ...</code>, pokud vlastní významný stav/invariant.</p>
+<ol>
+<li>Přidělte každou významnou odpovědnost právě jednomu hlavnímu ownerovi.</li>
+<li>Nakreslete pouze povolené/požadované závislosti.</li>
+<li>Každou důležitou šipku popište interakcí nebo rozhraním.</li>
+<li>Externí systémy umístěte mimo <code>Reservation System</code>.</li>
+<li>Rozhodnutí z ADR musí být v diagramu viditelné.</li>
+</ol>
+<p>Příklad formy:</p>
+<div class='diagram'><pre>+------------------------- Reservation System ------------------------+
+|                                                                      |
+| [Reservation Management]                                            |
+| role: lifecycle + confirmation                                       |
+| owns: Reservation lifecycle                                          |
+|       | check availability                                           |
+|       v                                                              |
+| [Availability]                                                       |
+|                                                                      |
+| [Approval Workflow]                                                  |
+| role: approval process                                               |
+| owns: approval state                                                 |
+|                                                                      |
+| [Notification Integration]                                           |
++-----------------------|----------------------------------------------+
+                        | send notification
+                        v
+               [Notification Service]</pre></div>
+<hr>
+<h2>G3. Doplňte ownership přechodů ve statechartu z C02</h2>
+<p>Použijte existující statechart.</p>
+<p>Pro relevantní přechody doplňte:</p>
+<div class='table-wrap'><table><thead><tr><th>Přechod</th><th>Owner rozhodnutí</th><th>Kdo může transition pouze vyžádat</th></tr></thead>
+<tbody>
+<tr><td><code>DRAFT → PENDING_APPROVAL</code></td><td>...</td><td>...</td></tr>
+<tr><td><code>PENDING_APPROVAL → CONFIRMED</code></td><td>...</td><td>...</td></tr>
+<tr><td><code>PENDING_APPROVAL → REJECTED</code></td><td>...</td><td>...</td></tr>
+</tbody>
+</table></div>
+<p>Owner musí odpovídat prvku z G2.</p>
+<hr>
+<h2>G4. Nakreslete runtime/deployment mapping</h2>
+<p>Ukažte:</p>
+<ul>
+<li>skutečné procesy/deployables;</li>
+<li>databázi;</li>
+<li>externí runtime systémy;</li>
+<li>mapování logických prvků z G2 do procesů/deployables.</li>
+</ul>
+<p>Pokud máte jednu aplikaci, ukažte jednu aplikaci.</p>
+<p>Příklad:</p>
+<div class='diagram'><pre>[Reservation Application process]
+contains:
+- Reservation Management
+- Approval Workflow
+- Notification Integration
+
+        | read/write
+        v
+   [PostgreSQL]
+
+        +--------------------&gt; [External IdP]
+        +--------------------&gt; [Notification Service]</pre></div>
+<hr>
+<h2>H1. Nakreslete návrhový sekvenční diagram</h2>
+<p>Použijte <strong>stejný scénář z C02 a Části A</strong>.</p>
+<p>Diagram má ukázat, jak scénář realizuje <strong>přijatá TO-BE architektura</strong>.</p>
+<h3>Lifelines</h3>
+<p>Použijte:</p>
+<ul>
+<li>actor;</li>
+<li>relevantní prvky z G2;</li>
+<li>konkrétní doménový objekt/interface pouze tehdy, pokud je potřeba pro vysvětlení rozhodnutí.</li>
+</ul>
+<h3>Messages</h3>
+<p>Zobrazte pouze interakce, které:</p>
+<ul>
+<li>realizují významné kroky scénáře;</li>
+<li>rozhodují business pravidlo;</li>
+<li>mění stav;</li>
+<li>překračují důležitou boundary;</li>
+<li>souvisejí s driverem/ADR.</li>
+</ul>
+<p>Přidejte jednu důležitou <code>alt</code> větev, např. conflict/failure/reject.</p>
+<p>Účastník ani závislost se nesmí objevit pouze v sekvenci; musí odpovídat G2.</p>
+<hr>
+<h2>H2. Nakreslete zaměřený návrhový třídní diagram</h2>
+<p>Použijte UML Class Diagram pro stejný scénář.</p>
+<p>Typicky použijte <strong>4–10 tříd/rozhraní</strong>.</p>
+<p>Zobrazte pouze:</p>
+<ul>
+<li>doménové entity/value objects potřebné pro scénář;</li>
+<li>policy/rule objekty;</li>
+<li>application/service objekt, pokud je v návrhu;</li>
+<li>významná rozhraní;</li>
+<li>repository interface, pokud je v návrhu;</li>
+<li>relevantní relationships/multiplicities;</li>
+<li>operace použité v H1 nebo nutné pro ownership responsibility.</li>
+</ul>
+<p>Každá významná lifeline/operace z H1 musí mít v H2 smysluplného vlastníka.</p>
+<hr>
+<h2>I. Proveďte cross-view kontrolu</h2>
+<p>Zkontrolujte následující vazby:</p>
+<div class='table-wrap'><table><thead><tr><th>Kontrola</th><th>Otázka</th></tr></thead>
+<tbody>
+<tr><td>C02 ↔ G2</td><td>Umí architektura realizovat požadované chování a pravidla?</td></tr>
+<tr><td>C2 ↔ G2</td><td>Má každá významná odpovědnost jednoho ownera?</td></tr>
+<tr><td>G2 ↔ H1</td><td>Používá sekvence pouze existující/povolené závislosti?</td></tr>
+<tr><td>H1 ↔ H2</td><td>Má každá významná zpráva/operace strukturálního vlastníka?</td></tr>
+<tr><td>statechart ↔ G3/H1</td><td>Rozhoduje transition správný owner?</td></tr>
+<tr><td>G2 ↔ G4</td><td>Je každý logický prvek realisticky namapovaný do runtime?</td></tr>
+<tr><td>ADR ↔ G2/G4</td><td>Je přijaté rozhodnutí skutečně vidět v architektuře?</td></tr>
+</tbody>
+</table></div>
+<p>Rozpor opravte v příslušném artefaktu před změnou kódu.</p>
+<hr>
+<h2>J. Sepište AS-IS → TO-BE delta</h2>
+<p>Použijte Part A a přijaté diagramy G/H.</p>
+<div class='table-wrap'><table><thead><tr><th>Oblast</th><th>AS-IS</th><th>TO-BE</th><th>Akce</th></tr></thead>
+<tbody>
+<tr><td>změna <code>Reservation.state</code></td><td>controller + service</td><td>pouze owner lifecycle</td><td><code>CHANGE</code></td></tr>
+<tr><td>Notification API</td><td>vendor SDK v application logic</td><td>izolováno v integration prvku</td><td><code>CHANGE</code></td></tr>
+<tr><td>persistence dependency</td><td>už odpovídá návrhu</td><td>stejné</td><td><code>KEEP</code></td></tr>
+<tr><td>dependency rule</td><td>neověřeno</td><td>pouze povolené směry</td><td><code>VERIFY</code></td></tr>
+</tbody>
+</table></div>
+<p>Povolené akce:</p>
+<ul>
+<li><code>CHANGE</code> — kód změnit;</li>
+<li><code>KEEP</code> — současná implementace už odpovídá návrhu;</li>
+<li><code>VERIFY</code> — implementace pravděpodobně odpovídá, ale potřebujete ověření.</li>
+</ul>
+<hr>
+<h2>K. Upravte implementaci</h2>
+<p>Proveďte řádky <code>CHANGE</code> z J.</p>
+<p>Potom:</p>
+<ol>
+<li>aplikaci sestavte/spusťte;</li>
+<li>spusťte relevantní ověřovací příklady z C02;</li>
+<li>opravte chyby způsobené změnou;</li>
+<li>zaznamenejte commit/tag.</li>
+</ol>
+<p>Pokud J neobsahuje žádné <code>CHANGE</code>, kód nepřepisujte pouze kvůli cvičení.</p>
+<hr>
+<h2>L1. Ověřte chování</h2>
+<p>Znovu spusťte relevantní verification examples z C02 pro zvolený scénář a změněné části.</p>
+<p>Zapište:</p>
+<div class='table-wrap'><table><thead><tr><th>Ověření</th><th>Výsledek</th><th>Doklad</th></tr></thead>
+<tbody>
+<tr><td>success path</td><td>...</td><td>...</td></tr>
+<tr><td>vybraná alternative/failure</td><td>...</td><td>...</td></tr>
+<tr><td>relevantní boundary/concurrency test</td><td>...</td><td>...</td></tr>
+</tbody>
+</table></div>
+<hr>
+<h2>L2. Ověřte jedno architektonické pravidlo</h2>
+<p>Vyberte pravidlo, které přímo plyne z ADR/G2.</p>
+<p>Příklad:</p>
+<div class='diagram'><pre>Pouze Reservation Management smí měnit Reservation lifecycle state.</pre></div>
+<p>nebo:</p>
+<div class='diagram'><pre>Vendor Notification SDK smí být použit pouze v Notification Integration.</pre></div>
+<p>Vytvořte jednu <strong>opakovatelnou</strong> kontrolu:</p>
+<ul>
+<li>architecture/dependency test;</li>
+<li>static-analysis rule;</li>
+<li>script/repository check;</li>
+<li>jinou reprodukovatelnou kontrolu.</li>
+</ul>
+<p>Zapište:</p>
+<div class='diagram'><pre>Architektonické pravidlo:
+Kontrola:
+Výsledek:</pre></div>
+<hr>
+<h2>M. Evidence</h2>
+<p>Do <code>docs/evidence-and-evolution.md</code> přidejte:</p>
+<div class='diagram'><pre>## C03 — Architecture Evidence
+
+Baseline: v0.2
+Part A:
+
+Drivers:
+Decision question:
+Alternatives:
+Scenario walkthrough:
+ADR:
+
+Views:
+- domain class
+- context
+- static architecture
+- state ownership
+- runtime/deployment
+- design sequence
+- focused design class
+
+Cross-view issues found/resolved:
+AS-IS → TO-BE delta:
+Implementation changes:
+
+Behaviour verification:
+Architecture conformance rule + result:
+
+Remaining uncertainty / risk:
+Commit/tag:</pre></div>
+<hr>
+<h2>Hotovo je, když</h2>
+<ul class='checks'>
+<li>3–5 driverů je podložených požadavky/evidencí;</li>
+<li>relevantní doménový model je konzistentní s C02;</li>
+<li>významné odpovědnosti jsou explicitní a mají jasné ownership požadavky;</li>
+<li>jedna hlavní decision question má dvě materiálně odlišné alternativy;</li>
+<li>alternativy jsou porovnané vůči driverům a procházejí stejným významným scénářem;</li>
+<li>ADR zaznamenává rozhodnutí, negativní důsledky a <code>reconsider when</code>;</li>
+<li>context, static architecture, state ownership a runtime mapping si neodporují;</li>
+<li>jeden scénář je realizovaný návrhovým sequence diagramem;</li>
+<li>design class diagram podporuje stejnou realizaci;</li>
+<li>cross-view kontrola je provedena před změnou kódu;</li>
+<li>AS-IS → TO-BE delta určuje <code>CHANGE / KEEP / VERIFY</code>;</li>
+<li>relevantní C02 behaviour verification po změně prochází;</li>
+<li>jedna opakovatelná kontrola chrání konkrétní architektonické pravidlo;</li>
+<li>evidence a přesný commit/tag jsou zaznamenané.</li>
+</ul>
+<hr></section><section class="en"><h1>EN</h1>
+<h2>SWI C03 — Architecture</h2>
+<h3>From AS-IS Implementation to an Accepted Architecture</h3>
+<h2>Goal</h2>
+<p>Design and justify the architecture for a selected part of the system, connect it to the requirements and scenarios from C02, and verify that the implementation actually conforms to the accepted architecture.</p>
+<h2>What you will learn</h2>
+<ul>
+<li>derive architecture-significant problems and drivers from requirements and evidence;</li>
+<li>distinguish domain concepts, responsibilities, and their implementation allocation;</li>
+<li>identify which responsibilities and state require a clear owner;</li>
+<li>formulate a concrete architecture decision question;</li>
+<li>create and compare multiple realistic architecture alternatives;</li>
+<li>evaluate alternatives using the same scenario, including a failure / concurrency situation;</li>
+<li>record a decision and its consequences in an ADR;</li>
+<li>create consistent structural, dynamic, and runtime views of the architecture;</li>
+<li>realize a scenario with a design sequence diagram and focused design class diagram;</li>
+<li>check consistency across requirements, diagrams, decisions, and code;</li>
+<li>compare the AS-IS implementation with the accepted TO-BE architecture;</li>
+<li>change the implementation only where the accepted design requires it;</li>
+<li>verify not only functional behaviour but also conformance to a concrete architecture rule.</li>
+</ul>
+<p>Use:</p>
+<ul>
+<li>Specification Baseline v0.2;</li>
+<li>scenarios, rules/invariants, and statechart from C02;</li>
+<li>verification examples from C02;</li>
+<li>the running application;</li>
+<li>architecture drivers carried from C02;</li>
+<li>Part A — mapping the current implementation.</li>
+</ul>
+<p>If you completed Part A on Tuesday, use it as the finished AS-IS input. Update only items affected by code that your team actually changed afterwards.</p>
+<h3>C03 flow</h3>
+<div class='diagram'><pre>AS-IS evidence
+    ↓
+drivers
+    ↓
+domain + responsibilities
+    ↓
+decision question
+    ↓
+alternatives
+    ↓
+evaluate alternatives with drivers + scenario
+    ↓
+ADR
+    ↓
+TO-BE architecture
+    ↓
+scenario realization
+    ↓
+AS-IS → TO-BE delta
+    ↓
+implementation
+    ↓
+behaviour + architecture verification</pre></div>
+<hr>
+<h2>B. Refine 3–5 Architecture Drivers</h2>
+<p>Start with drivers from C02. Add another driver only if it is supported by requirements, constraints, or findings from Part A.</p>
+<p>For each driver complete:</p>
+<div class='table-wrap'><table><thead><tr><th>Evidence / source</th><th>Why it affects architecture</th><th>Question architecture must answer</th></tr></thead>
+<tbody>
+<tr><td><code>BR-02</code>, <code>REQ-04</code>, Part A</td><td>two concurrent requests may both observe “no conflict”</td><td>where must the authoritative confirmation decision happen so that <code>BR-02</code> remains true?</td></tr>
+<tr><td>approval may arrive later</td><td>state must survive beyond the initiating request</td><td>who owns pending approval state and who performs the later transition?</td></tr>
+<tr><td><code>Notification Service</code> may fail</td><td>business state may be committed before notification</td><td>should notification failure affect confirmation success and who owns retry?</td></tr>
+</tbody>
+</table></div>
+<p>A <strong>driver is not a solution</strong>. <code>transaction</code>, <code>event bus</code>, <code>microservice</code>, or <code>repository pattern</code> are candidate mechanisms/solutions.</p>
+<hr>
+<h2>C1. Update the Domain Class Model</h2>
+<p>If you already have a domain model, reuse it and update only the relevant part.</p>
+<p>Use typically <strong>4–10 domain concepts</strong> relevant to the selected scenario and drivers.</p>
+<p>Show:</p>
+<ul>
+<li>concepts such as <code>Reservation</code>, <code>Resource</code>, <code>User</code>, <code>Approval</code>, <code>TimeInterval</code>;</li>
+<li>relationships;</li>
+<li>multiplicities where they have business meaning;</li>
+<li>significant constraints/invariants where appropriate.</li>
+</ul>
+<p>Do not include <code>Controller</code>, <code>Repository</code>, HTTP clients, or framework classes in the domain model.</p>
+<hr>
+<h2>C2. Identify System Responsibilities</h2>
+<p>Use the same C02 scenario, its rules, and the drivers from B.</p>
+<p>Record all significant responsibilities for this slice; typically <strong>5–8</strong>.</p>
+<div class='table-wrap'><table><thead><tr><th>Source</th><th>Responsibility</th><th>What it must decide / own</th><th>Needs one clear owner?</th><th>Reason</th></tr></thead>
+<tbody>
+<tr><td>Confirm + statechart</td><td>decide whether confirmation is allowed</td><td>lifecycle transition</td><td>yes</td><td>different parts must not decide differently</td></tr>
+<tr><td><code>BR-02</code></td><td>evaluate conflict and preserve invariant</td><td>confirmation decision under conflict</td><td>yes</td><td>concurrency must not violate invariant</td></tr>
+<tr><td>approval change</td><td>manage pending approval</td><td>approve/reject/expire state</td><td>yes</td><td>state survives a request</td></tr>
+<tr><td>notification</td><td>deliver notification</td><td>delivery/retry</td><td>design-dependent</td><td>external failure must have defined semantics</td></tr>
+</tbody>
+</table></div>
+<p>For each responsibility also record:</p>
+<ul>
+<li>what it <strong>must be grouped with</strong> because it shares state/invariant;</li>
+<li>what it <strong>should be separated from</strong> because it has a different reason to change, failure/trust boundary, or external technology.</li>
+</ul>
+<p>Do not assign component names yet.</p>
+<hr>
+<h2>D. Formulate One Main Decision Question</h2>
+<p>Choose one question that:</p>
+<ul>
+<li>comes from a driver;</li>
+<li>affects structure/ownership/interaction/runtime;</li>
+<li>has at least two real solution alternatives.</li>
+</ul>
+<p>Examples:</p>
+<ul>
+<li>Where should the delayed approval workflow be owned?</li>
+<li>Where should the confirmation decision be enforced so that <code>BR-02</code> remains true under concurrency?</li>
+<li>Where should <code>Notification Service</code> integration be isolated and what should its failure mean for <code>Confirm Reservation</code>?</li>
+</ul>
+<p>Record:</p>
+<div class='diagram'><pre>Decision question:</pre></div>
+<hr>
+<h2>E1. Create Two Materially Different Alternatives</h2>
+<p>For the same decision question create <strong>two small structural alternatives</strong>.</p>
+<p>Each sketch should contain only the elements needed to show the difference.</p>
+<p>Example question: <em>Where should approval workflow be owned?</em></p>
+<div class='diagram'><pre>Alternative A — same deployable
+
+[Reservation Application]
+  ├─ [Reservation]
+  └─ [Approval Workflow]</pre></div>
+<div class='diagram'><pre>Alternative B — separate runtime element
+
+[Reservation Application]
+          |
+          v
+[Approval Worker / Service]</pre></div>
+<hr>
+<h2>E2. Compare Alternatives Against Drivers</h2>
+<p>Select <strong>3–5 criteria directly from your drivers</strong>.</p>
+<div class='table-wrap'><table><thead><tr><th>Driver / criterion</th><th>Alternative A</th><th>Alternative B</th></tr></thead>
+<tbody>
+<tr><td>consistency</td><td>concrete consequence</td><td>concrete consequence</td></tr>
+<tr><td>failure behaviour</td><td>...</td><td>...</td></tr>
+<tr><td>change / ownership</td><td>...</td><td>...</td></tr>
+<tr><td>operational complexity</td><td>...</td><td>...</td></tr>
+</tbody>
+</table></div>
+<p>Do not use unexplained numeric scores. Write concrete technical consequences.</p>
+<hr>
+<h2>E3. Walk the Same Significant Scenario Through Both Alternatives</h2>
+<p>Use the same C02 scenario and one important complication: failure, concurrency, or delayed response.</p>
+<p>Do not create two detailed sequence diagrams. Use a table:</p>
+<div class='table-wrap'><table><thead><tr><th>Step / event</th><th>Alternative A</th><th>Alternative B</th></tr></thead>
+<tbody>
+<tr><td><code>Confirm Reservation</code> starts</td><td>...</td><td>...</td></tr>
+<tr><td>approval is required</td><td>...</td><td>...</td></tr>
+<tr><td>initiating request/process ends</td><td>...</td><td>...</td></tr>
+<tr><td>approval arrives later</td><td>...</td><td>...</td></tr>
+<tr><td>relevant failure/concurrency event</td><td>...</td><td>...</td></tr>
+</tbody>
+</table></div>
+<p>Goal: verify that both alternatives can realize the required behaviour and expose their different consequences.</p>
+<hr>
+<h2>F. Record the ADR</h2>
+<p>After the comparison and scenario walkthrough record:</p>
+<div class='diagram'><pre>## ADR-xx — &lt;decision question&gt;
+
+Context:
+Drivers:
+Alternative A:
+Alternative B:
+Decision:
+Reason:
+Accepted negative consequences:
+Reconsider when:</pre></div>
+<hr>
+<h2>G1. Draw the System Context</h2>
+<p>Create one <strong>context diagram</strong>.</p>
+<p>Procedure:</p>
+<ol>
+<li><code>Reservation System</code> = one block.</li>
+<li>Place only real external actors/systems relevant to the project around it.</li>
+<li>Label each connection with the information/command crossing the boundary.</li>
+<li>Do not put internal components into the context diagram.</li>
+</ol>
+<p>Example:</p>
+<div class='diagram'><pre>[User / Approver]
+      | reservation commands / approval
+      v
++----------------------+
+|  Reservation System  |
++----------------------+
+     | identity claims
+     +----------------------&gt; [IdP]
+
+     | notification request
+     +----------------------&gt; [Notification Service]</pre></div>
+<hr>
+<h2>G2. Draw the TO-BE Static Architecture</h2>
+<p>Use a UML Component Diagram, block diagram, or equivalent structural notation.</p>
+<h3>Procedure</h3>
+<ol>
+<li>Take responsibilities from C2.</li>
+<li>Group them into <strong>3–8 logical architectural elements</strong>.</li>
+<li>Each element must show:</li>
+</ol>
+<p>   - name;</p>
+<p>   - primary responsibility;</p>
+<p>   - <code>owns: ...</code> if it owns important state/invariant.</p>
+<ol>
+<li>Assign every significant responsibility to one primary owner.</li>
+<li>Draw only allowed/required dependencies.</li>
+<li>Label each important arrow with an interaction or interface.</li>
+<li>Place external systems outside <code>Reservation System</code>.</li>
+<li>The ADR decision must be visible in the diagram.</li>
+</ol>
+<p>Example form:</p>
+<div class='diagram'><pre>+------------------------- Reservation System ------------------------+
+|                                                                      |
+| [Reservation Management]                                            |
+| role: lifecycle + confirmation                                       |
+| owns: Reservation lifecycle                                          |
+|       | check availability                                           |
+|       v                                                              |
+| [Availability]                                                       |
+|                                                                      |
+| [Approval Workflow]                                                  |
+| role: approval process                                               |
+| owns: approval state                                                 |
+|                                                                      |
+| [Notification Integration]                                           |
++-----------------------|----------------------------------------------+
+                        | send notification
+                        v
+               [Notification Service]</pre></div>
+<hr>
+<h2>G3. Add Transition Ownership to the C02 Statechart</h2>
+<p>Reuse the existing statechart.</p>
+<p>For relevant transitions add:</p>
+<div class='table-wrap'><table><thead><tr><th>Transition</th><th>Decision owner</th><th>Who may only request the transition</th></tr></thead>
+<tbody>
+<tr><td><code>DRAFT → PENDING_APPROVAL</code></td><td>...</td><td>...</td></tr>
+<tr><td><code>PENDING_APPROVAL → CONFIRMED</code></td><td>...</td><td>...</td></tr>
+<tr><td><code>PENDING_APPROVAL → REJECTED</code></td><td>...</td><td>...</td></tr>
+</tbody>
+</table></div>
+<p>The owner must correspond to an element from G2.</p>
+<hr>
+<h2>G4. Draw Runtime/Deployment Mapping</h2>
+<p>Show:</p>
+<ul>
+<li>actual processes/deployables;</li>
+<li>database;</li>
+<li>external runtime systems;</li>
+<li>mapping of logical elements from G2 into processes/deployables.</li>
+</ul>
+<p>If you have one application, show one application.</p>
+<p>Example:</p>
+<div class='diagram'><pre>[Reservation Application process]
+contains:
+- Reservation Management
+- Approval Workflow
+- Notification Integration
+
+        | read/write
+        v
+   [PostgreSQL]
+
+        +--------------------&gt; [External IdP]
+        +--------------------&gt; [Notification Service]</pre></div>
+<hr>
+<h2>H1. Draw the Design Sequence Diagram</h2>
+<p>Use the <strong>same scenario from C02 and Part A</strong>.</p>
+<p>The diagram shows how the <strong>accepted TO-BE architecture</strong> realizes the scenario.</p>
+<h3>Lifelines</h3>
+<p>Use:</p>
+<ul>
+<li>actor;</li>
+<li>relevant elements from G2;</li>
+<li>a concrete domain object/interface only when needed to explain the decision.</li>
+</ul>
+<h3>Messages</h3>
+<p>Show only interactions that:</p>
+<ul>
+<li>realize significant scenario steps;</li>
+<li>decide a business rule;</li>
+<li>change state;</li>
+<li>cross an important boundary;</li>
+<li>relate to the driver/ADR.</li>
+</ul>
+<p>Include one important <code>alt</code> branch, such as conflict/failure/reject.</p>
+<p>A participant or dependency must not exist only in the sequence; it must be consistent with G2.</p>
+<hr>
+<h2>H2. Draw the Focused Design Class Diagram</h2>
+<p>Use a UML Class Diagram for the same scenario.</p>
+<p>Typically use <strong>4–10 classes/interfaces</strong>.</p>
+<p>Show only:</p>
+<ul>
+<li>domain entities/value objects needed by the scenario;</li>
+<li>policy/rule objects;</li>
+<li>application/service object if present in your design;</li>
+<li>significant interfaces;</li>
+<li>repository interface if present;</li>
+<li>relevant relationships/multiplicities;</li>
+<li>operations used in H1 or required to own a responsibility.</li>
+</ul>
+<p>Every significant lifeline/operation from H1 must have a meaningful structural owner in H2.</p>
+<hr>
+<h2>I. Perform the Cross-View Check</h2>
+<p>Check:</p>
+<div class='table-wrap'><table><thead><tr><th>Check</th><th>Question</th></tr></thead>
+<tbody>
+<tr><td>C02 ↔ G2</td><td>Can the architecture realize the required behaviour and rules?</td></tr>
+<tr><td>C2 ↔ G2</td><td>Does every significant responsibility have one owner?</td></tr>
+<tr><td>G2 ↔ H1</td><td>Does the sequence use only existing/allowed dependencies?</td></tr>
+<tr><td>H1 ↔ H2</td><td>Does every significant message/operation have a structural owner?</td></tr>
+<tr><td>statechart ↔ G3/H1</td><td>Is each transition decided by the correct owner?</td></tr>
+<tr><td>G2 ↔ G4</td><td>Is each logical element realistically mapped to runtime?</td></tr>
+<tr><td>ADR ↔ G2/G4</td><td>Is the accepted decision visible in the architecture?</td></tr>
+</tbody>
+</table></div>
+<p>Resolve inconsistencies in the relevant artifact before changing code.</p>
+<hr>
+<h2>J. Record the AS-IS → TO-BE Delta</h2>
+<p>Use Part A and the accepted G/H views.</p>
+<div class='table-wrap'><table><thead><tr><th>Area</th><th>AS-IS</th><th>TO-BE</th><th>Action</th></tr></thead>
+<tbody>
+<tr><td><code>Reservation.state</code> mutation</td><td>controller + service</td><td>lifecycle owner only</td><td><code>CHANGE</code></td></tr>
+<tr><td>Notification API</td><td>vendor SDK in application logic</td><td>isolated integration element</td><td><code>CHANGE</code></td></tr>
+<tr><td>persistence dependency</td><td>already matches design</td><td>same</td><td><code>KEEP</code></td></tr>
+<tr><td>dependency rule</td><td>not verified</td><td>allowed directions only</td><td><code>VERIFY</code></td></tr>
+</tbody>
+</table></div>
+<p>Allowed actions:</p>
+<ul>
+<li><code>CHANGE</code> — change code;</li>
+<li><code>KEEP</code> — current implementation already conforms;</li>
+<li><code>VERIFY</code> — implementation likely conforms but requires explicit evidence.</li>
+</ul>
+<hr>
+<h2>K. Update the Implementation</h2>
+<p>Perform all <code>CHANGE</code> rows from J.</p>
+<p>Then:</p>
+<ol>
+<li>build/run the application;</li>
+<li>rerun relevant C02 verification examples;</li>
+<li>fix defects introduced by restructuring;</li>
+<li>record exact commit/tag.</li>
+</ol>
+<p>If J contains no <code>CHANGE</code>, do not rewrite code merely for the exercise.</p>
+<hr>
+<h2>L1. Verify Behaviour</h2>
+<p>Rerun relevant C02 verification examples for the selected scenario and changed areas.</p>
+<p>Record:</p>
+<div class='table-wrap'><table><thead><tr><th>Verification</th><th>Result</th><th>Evidence</th></tr></thead>
+<tbody>
+<tr><td>success path</td><td>...</td><td>...</td></tr>
+<tr><td>selected alternative/failure</td><td>...</td><td>...</td></tr>
+<tr><td>relevant boundary/concurrency test</td><td>...</td><td>...</td></tr>
+</tbody>
+</table></div>
+<hr>
+<h2>L2. Verify One Architecture Rule</h2>
+<p>Choose one rule directly derived from the ADR/G2.</p>
+<p>Example:</p>
+<div class='diagram'><pre>Only Reservation Management may change Reservation lifecycle state.</pre></div>
+<p>or:</p>
+<div class='diagram'><pre>Vendor Notification SDK may only be used inside Notification Integration.</pre></div>
+<p>Create one <strong>repeatable</strong> check:</p>
+<ul>
+<li>architecture/dependency test;</li>
+<li>static-analysis rule;</li>
+<li>script/repository check;</li>
+<li>another reproducible check.</li>
+</ul>
+<p>Record:</p>
+<div class='diagram'><pre>Architecture rule:
+Check:
+Result:</pre></div>
+<hr>
+<h2>M. Evidence</h2>
+<p>Add to <code>docs/evidence-and-evolution.md</code>:</p>
+<div class='diagram'><pre>## C03 — Architecture Evidence
+
+Baseline: v0.2
+Part A:
+
+Drivers:
+Decision question:
+Alternatives:
+Scenario walkthrough:
+ADR:
+
+Views:
+- domain class
+- context
+- static architecture
+- state ownership
+- runtime/deployment
+- design sequence
+- focused design class
+
+Cross-view issues found/resolved:
+AS-IS → TO-BE delta:
+Implementation changes:
+
+Behaviour verification:
+Architecture conformance rule + result:
+
+Remaining uncertainty / risk:
+Commit/tag:</pre></div>
+<hr>
+<h2>Done when</h2>
+<ul class='checks'>
+<li>3–5 drivers are supported by requirements/evidence;</li>
+<li>relevant domain model is consistent with C02;</li>
+<li>significant responsibilities are explicit with clear ownership needs;</li>
+<li>one main decision question has two materially different alternatives;</li>
+<li>alternatives are compared against drivers and walked through the same significant scenario;</li>
+<li>ADR records the decision, negative consequences, and <code>reconsider when</code>;</li>
+<li>context, static architecture, state ownership, and runtime mapping are consistent;</li>
+<li>one scenario is realized with a design sequence diagram;</li>
+<li>design class diagram supports the same realization;</li>
+<li>cross-view check is completed before changing code;</li>
+<li>AS-IS → TO-BE delta defines <code>CHANGE / KEEP / VERIFY</code>;</li>
+<li>relevant C02 behaviour verification passes after changes;</li>
+<li>one repeatable check protects a concrete architecture rule;</li>
+<li>evidence and exact commit/tag are recorded.</li>
+</ul></section></main></body></html>

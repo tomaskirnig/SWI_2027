@@ -67,24 +67,22 @@ Zachycuje celý životní cyklus rezervace v Baseline v0.1, přípustné stavy (
   - `BR-03`: Politika rušení a termínů (potvrzení i storno nejpozději 15 minut před začátkem rezervace: `currentTime <= start - 15 min`, idempotentní úspěch pro `CANCELLED`).
   - `BR-04`: Denní limit 30 minut student–křeček.
   - `BR-05`: Dopad stavů na křečka a limit (pouze `CONFIRMED` křečka reálně blokuje a počítá se do 30min limitu; `DRAFT` ani `CANCELLED` křečka neobsazují). 
-- **Chování DRAFTu při expiraci času (pravidlo 15 minut předem):**
+- **Chování DRAFTu při časové hranici (pravidlo 15 minut předem):**
   - Pokud student potvrdí návrh včas (`currentTime <= start - 15 min`), přejde do `CONFIRMED`.
-  - Pokud zbývá méně než 15 minut do začátku (`currentTime > start - 15 min`) a student se pokusí potvrdit, klientské rozhraní nabídne posun času o prodlevu. Pokud návrh není potvrzen v novém platném termínu, expiruje bez alokace prostředků.
+  - Při `currentTime > start - 15 min` je potvrzení odmítnuto s rozlišitelným důvodem. Rezervace zůstane `DRAFT`. Automatický posun termínu ani expirace `DRAFT` nejsou součástí baseline.
 
 ```mermaid
 stateDiagram-v2
     [*] --> DRAFT : OP-01 Create Reservation [křeček aktivní, začátek >= 15 min v budoucnu, nekolize a limit]
 
     note right of DRAFT
-        Návrh neblokuje křečka ani limit.
-        Při pokusu o potvrzení méně než 15 min
-        před začátkem UI nabídne posunout časy
-        o prodlevu; nepotvrzený návrh expiruje.
+        Návrh neblokuje křečka ani denní limit.
+        Pozdní Confirm je odmítnut bez změny stavu.
+        Samotné uplynutí času DRAFT nemění.
     end note
 
     DRAFT --> CONFIRMED : OP-03 Confirm Reservation [currentTime <= start - 15 min, aktivní křeček, žádný překryv, limit <= 30 min]
     DRAFT --> CANCELLED : OP-04 Cancel Reservation [storno nejpozději 15 min před začátkem]
-    DRAFT --> [*] : Uplynutí termínu bez potvrzení / opuštění návrhu
 
     note right of CONFIRMED
         Jediný stav v v0.1, který
@@ -134,7 +132,7 @@ flowchart TD
         CheckAuth{"Existuje rezervace a<br/>patří studentovi?"}:::decision
         CheckState{"Je stav rezervace<br/>DRAFT?"}:::decision
         CheckTime{"Platí časové pravidlo<br/>currentTime <= start - 15 min?"}:::decision
-        PromptTime["Nabídnout v UI posun časů o prodlevu /<br/>odmítnout: do začátku zbývá méně než 15 min"]:::fail
+        PromptTime["Odmítnout: do začátku zbývá méně než 15 min"]:::fail
         CheckHamster{"Je křeček<br/>aktivní?"}:::decision
         RejectAuth["Odmítnout: Neexistující nebo cizí"]:::fail
         RejectState["Odmítnout: Neplatný stav"]:::fail
@@ -234,6 +232,88 @@ flowchart TD
 
 ---
 
+## 1.5 Diagram aktivit — OP-01: Vytvoření rezervace (bod 9c)
+
+Modeluje procesní tok vytvoření nezávazného návrhu (`DRAFT`). Zobrazuje předběžnou kontrolu časového pravidla (nejpozději 15 min předem), existence a aktivity křečka a předběžné ověření kolizí (s `CONFIRMED` i `PENDING_APPROVAL`) a denního limitu. Úspěšné vytvoření uloží `DRAFT` bez závazné alokace prostředku.
+
+```mermaid
+flowchart TD
+    classDef success fill:#d4edda,stroke:#28a745,stroke-width:2px,color:#155724;
+    classDef fail fill:#f8d7da,stroke:#dc3545,stroke-width:2px,color:#721c24;
+    classDef decision fill:#e8f4fd,stroke:#0d6efd,stroke-width:1.5px,color:#084298;
+    classDef step fill:#f8f9fa,stroke:#495057,stroke-width:1.5px,color:#212529;
+
+    subgraph ClientLane["👤 Student (Klient)"]
+        ReqCreate(["Požadavek na vytvoření rezervace (OP-01)"]):::step
+        RespCreateSuccess(["Konec: Vytvořen DRAFT (vráceno ID)"]):::success
+        RespCreateFail(["Konec: Odmítnuto (chyba, data beze změny)"]):::fail
+    end
+
+    subgraph ApiLane["⚙️ Křečkomat API (Validace)"]
+        CheckInterval{"Platný interval a<br/>currentTime <= start - 15 min?"}:::decision
+        CheckHamsterExists{"Křeček existuje a<br/>je aktivní?"}:::decision
+        RejectCreateTime["Odmítnout: Neplatný čas / méně než 15 min"]:::fail
+        RejectCreateHamster["Odmítnout: Křeček neexistuje / neaktivní"]:::fail
+    end
+
+    subgraph DbLane["🗄️ Databáze (Předběžná kontrola a uložení)"]
+        PreCheckConflict{"Předběžná kontrola:<br/>Kolize s CONFIRMED / PENDING_APPROVAL<br/>nebo překročen limit 30 min?"}:::decision
+        RejectCreateConflict["Odmítnout: Termín koliduje / vyčerpán limit"]:::fail
+        InsertDraft["Uložit rezervaci se stavem DRAFT<br/>(nealokuje křečka, neblokuje limit)"]:::step
+    end
+
+    ReqCreate --> CheckInterval
+    CheckInterval -- "Ne" --> RejectCreateTime --> RespCreateFail
+    CheckInterval -- "Ano" --> CheckHamsterExists
+
+    CheckHamsterExists -- "Ne" --> RejectCreateHamster --> RespCreateFail
+    CheckHamsterExists -- "Ano" --> PreCheckConflict
+
+    PreCheckConflict -- "Kolize / Limit" --> RejectCreateConflict --> RespCreateFail
+    PreCheckConflict -- "V pořádku" --> InsertDraft --> RespCreateSuccess
+```
+
+---
+
+## 1.6 Diagram aktivit — OP-02: Ověření dostupnosti (v0.2) (bod 9c)
+
+Modeluje operaci dotazu na dostupnost křečka v zadaném časovém intervalu. Zahrnuje rozlišení chybného požadavku od platného výsledku nedostupnosti a zohledňuje blokování termínu rezervacemi ve stavu `CONFIRMED` i `PENDING_APPROVAL`.
+
+```mermaid
+flowchart TD
+    classDef available fill:#d4edda,stroke:#28a745,stroke-width:2px,color:#155724;
+    classDef unavailable fill:#fff3cd,stroke:#ffc107,stroke-width:2px,color:#856404;
+    classDef error fill:#f8d7da,stroke:#dc3545,stroke-width:2px,color:#721c24;
+    classDef decision fill:#e8f4fd,stroke:#0d6efd,stroke-width:1.5px,color:#084298;
+    classDef step fill:#f8f9fa,stroke:#495057,stroke-width:1.5px,color:#212529;
+
+    ReqAvail(["Dotaz na dostupnost křečka v intervalu (OP-02)"]):::step
+    CheckAvailInterval{"Platný interval<br/>(start < end)?"}:::decision
+    CheckAvailHamster{"Křeček existuje<br/>v katalogu?"}:::decision
+    CheckAvailActive{"Je křeček<br/>aktivní?"}:::decision
+    CheckAvailOverlap{"Překryv s CONFIRMED nebo<br/>PENDING_APPROVAL?"}:::decision
+
+    RejectAvail["Odmítnout: Chybný požadavek (400/404)<br/>beze změny dat"]:::error
+    ResultInactive["Vrátit UNAVAILABLE<br/>(důvod: křeček není aktivní)"]:::unavailable
+    ResultReserved["Vrátit UNAVAILABLE<br/>(důvod: termín je obsazen)"]:::unavailable
+    ResultAvailable["Vrátit AVAILABLE<br/>(termín je volný k rezervaci)"]:::available
+
+    ReqAvail --> CheckAvailInterval
+    CheckAvailInterval -- "Ne" --> RejectAvail
+    CheckAvailInterval -- "Ano" --> CheckAvailHamster
+
+    CheckAvailHamster -- "Ne" --> RejectAvail
+    CheckAvailHamster -- "Ano" --> CheckAvailActive
+
+    CheckAvailActive -- "Ne" --> ResultInactive
+    CheckAvailActive -- "Ano" --> CheckAvailOverlap
+
+    CheckAvailOverlap -- "Ano" --> ResultReserved
+    CheckAvailOverlap -- "Ne" --> ResultAvailable
+```
+
+---
+
 # Část 2: Baseline v0.2 — Změna: Schvalovací proces
 
 Tato část rozšiřuje systém podle **Části B zadání C02**:
@@ -261,14 +341,14 @@ stateDiagram-v2
     [*] --> DRAFT : OP-01 Create
 
     note right of DRAFT
-        Návrh neblokuje křečka.
-        Ukončí se opuštěním po termínu.
+        Návrh neblokuje křečka ani denní limit.
+        Pozdní Confirm je odmítnut bez změny stavu.
+        Samotné uplynutí času DRAFT nemění.
     end note
 
     DRAFT --> CONFIRMED : OP-03 Confirm [nevyžaduje schválení & splňuje pravidla]
     DRAFT --> PENDING_APPROVAL : OP-03 Confirm [vyžaduje schválení & splňuje pravidla]
     DRAFT --> CANCELLED : OP-04 Cancel [storno nejpozději 15 min před začátkem]
-    DRAFT --> [*] : Uplynutí termínu bez potvrzení
     
     note right of PENDING_APPROVAL
         Blokuje křečka před kolizí

@@ -14,7 +14,7 @@ Tento dokument shrnuje stav plnění požadavků cvičení C02 a kontrolního bo
 | **Společná doménová pravidla a invarianty** — definované pouze jednou (`BR-01` až `BR-07`) | ✅ Hotovo | [docs/reservation-specification.md](docs/reservation-specification.md) (oddíl 2) |
 | **Diagram případů užití (Use Case)** — aktéři a cíle pro v0.1 i v0.2 | ✅ Hotovo | [DIAGRAMS.md](DIAGRAMS.md) (oddíly 1.1 a 2.2) |
 | **Stavový diagram životního cyklu Reservation** — stavy v0.1 i v0.2 | ✅ Hotovo | [DIAGRAMS.md](DIAGRAMS.md) (oddíly 1.2 a 2.1) |
-| **Diagramy aktivit** — OP-03 Confirm a OP-04 Cancel se znázorněním odpovědností a ochrany proti souběhu | ✅ Hotovo | [DIAGRAMS.md](DIAGRAMS.md) (oddíly 1.3 a 1.4) |
+| **Diagramy aktivit** — OP-01 Create, OP-02 Availability, OP-03 Confirm a OP-04 Cancel se znázorněním odpovědností a ochrany proti souběhu | ✅ Hotovo | [DIAGRAMS.md](DIAGRAMS.md) (oddíly 1.3 až 1.6) |
 | **Vzájemná konzistence pohledů** — sjednocena časová pravidla (Create, Confirm a Cancel nejpozději 15 minut před začátkem; rozhodnutí Správce křečka pouze při `currentTime < start - 1h`; od `currentTime >= start - 1h` expirace), role Správce křečka a význam stavů | ✅ Hotovo | Všechny dokumenty vzájemně lícují |
 | **Baseline v0.2 (Změna: Schvalovací proces)** — změnová karta, analýza dopadu, nová operace OP-05 (Approve/Reject) a OP-06 (Expire) | ✅ Hotovo | [docs/reservation-specification.md](docs/reservation-specification.md) (oddíl 4) a [DIAGRAMS.md](DIAGRAMS.md) (oddíl 2) |
 | **Architektonické drivery pro C03** — souběh v transakcích, transactional outbox pro notifikace, plánovač expirací | ✅ Hotovo | [docs/evidence-and-evolution.md](docs/evidence-and-evolution.md) |
@@ -35,7 +35,7 @@ Byla vytvořena plně funkční a zkompilovatelná implementace rezervačního s
   * `confirmReservation` (OP-03) — atomická transakce (`FOR UPDATE`) chránící před souběhem (`REQ-07`); větvení do `CONFIRMED` nebo `PENDING_APPROVAL`.
   * `cancelReservation` (OP-04) — storno před začátkem s idempotentním úspěchem při opakování.
   * `decideReservation` (OP-05) — rozhodnutí `APPROVE` / `REJECT` Správcem křečka.
-  * `expirePendingReservations` (OP-06) — automatická expirace nerozhodnutých žádostí 1h před začátkem.
+  * `expirePendingReservations` (OP-06) — expirace nerozhodnutých žádostí 1h před začátkem (obslužná funkce + REST endpoint, automatický daemon přenesen do C03).
 * **[src/notification.ts](src/notification.ts) — Abstrakce Notification Service:**
   * Odděluje pokus o doručení oznámení od business transakce.
   * Umožňuje deterministicky simulovat úspěch i selhání doručení.
@@ -47,8 +47,8 @@ Byla vytvořena plně funkční a zkompilovatelná implementace rezervačního s
   * `GET /api/reservations/:id` — čtení detailu rezervace (CP1 walking skeleton).
   * `POST /api/reservations/:id/confirm` — potvrzení rezervace (OP-03).
   * `POST /api/reservations/:id/cancel` — zrušení rezervace (OP-04).
-  * `POST /api/reservations/:id/decide` — schválení / zamítnutí správcem křečka (OP-05).
-  * `POST /api/reservations/expire` — expirace žádostí časovačem (OP-06).
+  * `POST /api/reservations/:id/decide` — schválení / zamítnutí správcem křečka (OP-05, v demu simulováno přes `x-user-role`).
+  * `POST /api/reservations/expire` — spuštění kontroly expirací žádostí (OP-06).
   * Podpora hlavičky `x-current-time` pro deterministické testování časových hranic.
 * **[public/index.html](public/index.html) — Moderní a přátelské uživatelské rozhraní:**
   * Příjemný a uklidňující vizuální styl (teplé pastelové barvy, písma *Outfit* a *Nunito*, karty křečků).
@@ -63,6 +63,7 @@ Byla vytvořena plně funkční a zkompilovatelná implementace rezervačního s
 * **[src/verify.ts](src/verify.ts) — Automatizované ověření Specification Baseline:**
   * Integrační ověřovací skript běžící proti PostgreSQL.
   * Pokrývá všech 30 scénářů `V-01` až `V-26` včetně `V-15A`, `V-15B`, `V-20A` a `V-20B`.
+  * Využívá striktní assertions (`node:assert/strict`) spolehlivě detekující selhání.
   * Ověřuje časové hranice, stavové přechody, kolize, denní limit, souběh, schvalování, expiraci i selhání Notification Service.
   * Aktuální výsledek: `30 PASS`, `0 FAIL`.
   * Spuštění: `npm run verify`.

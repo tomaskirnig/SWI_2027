@@ -13,7 +13,7 @@ import {
   setNotificationSender,
   resetNotificationSender,
 } from './notification';
-import { assert } from 'console';
+import assert from 'node:assert/strict';
 
 type Scenario = {
   id: string;
