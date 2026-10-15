@@ -1,0 +1,443 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SWI C05 Detailed Design</title>
+<style>
+:root{--ink:#172033;--accent:#2457c5;--soft:#edf3ff;--line:#d5dde8}
+*{box-sizing:border-box}body{margin:0;background:#f3f5f8;color:var(--ink);font-family:Segoe UI,Arial,sans-serif;line-height:1.6}
+.bar{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--line);padding:14px 24px;display:flex;justify-content:flex-end;gap:10px;z-index:10}
+button{font-size:20px;font-weight:700;padding:10px 20px;border:1px solid var(--line);border-radius:8px;background:white;cursor:pointer}
+button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+main{max-width:1180px;margin:auto;background:white;padding:60px 78px 110px;min-height:100vh}
+.lang{display:none}.lang.active{display:block}
+h1{font-size:50px;line-height:1.05;margin:0 0 20px}h2{font-size:36px;line-height:1.15;margin:58px 0 22px;border-top:4px solid var(--accent);padding-top:18px}
+h3{font-size:28px;color:#173d8d;margin:34px 0 12px}
+p{font-size:23px;margin:10px 0 15px}blockquote{font-size:29px;font-weight:700;background:var(--soft);border-left:6px solid var(--accent);padding:22px 26px}
+pre{font-size:20px;line-height:1.5;background:#f6f8fb;border:1px solid var(--line);border-radius:10px;padding:20px;overflow:auto}
+pre.table{background:white;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:5px}
+.check{font-size:22px}
+@media(max-width:850px){main{padding:34px 24px}h1{font-size:40px}h2{font-size:31px}h3{font-size:25px}p{font-size:20px}pre{font-size:17px}}
+</style>
+<script>
+function lang(x){document.querySelectorAll('.lang').forEach(e=>e.classList.remove('active'));document.getElementById(x).classList.add('active');document.querySelectorAll('button').forEach(e=>e.classList.remove('active'));document.getElementById('b'+x).classList.add('active');}
+</script></head><body>
+<div class="bar"><button id="bcz" class="active" onclick="lang('cz')">CZ</button><button id="ben" onclick="lang('en')">EN</button></div>
+<main><section id="cz" class="lang active"><h1>C05 — Detailed Design</h1>
+<h2>Od architektury k návrhovému záměru a unit testům</h2>
+<h3>Proč Detailed Design?</h3>
+<p>V C03 jste rozhodli <strong>kde</strong> budou hlavní odpovědnosti a hranice systému. Detailed Design jde o úroveň níž a říká <strong>jak má být konkrétní software unit / component uvnitř navržena</strong>, aby:</p>
+<p>• byl explicitní návrhový záměr;</p>
+<p>• byly jasné významné metody, operace, algoritmy, data a stavy;</p>
+<p>• byla jasná rozhraní a kontrakty;</p>
+<p>• šlo z návrhu přímo odvodit unit/component testy;</p>
+<p>• implementace nebyla jen „kód, který zrovna funguje“.</p>
+<blockquote>**DD je technický základ pro implementaci a unit verification. Není to zpětný popis hotového kódu.**</blockquote>
+<h3>Co budete dělat</h3>
+<p>1. Vyberete jednu architecture responsibility / software unit.</p>
+<p>2. Odvodíte její detailed responsibilities.</p>
+<p>3. Navrhnete structure, data/state a interfaces.</p>
+<p>4. Navrhnete methods, algorithms a dynamic behavior.</p>
+<p>5. Odvodíte unit/component testy z DD.</p>
+<p>6. Implementujete a ověříte design ↔ code consistency.</p>
+<h2>I jednoduchý systém má DD</h2>
+<p>Například objednání jízdenky:</p>
+<pre><code>BuyTicket
+ ├─ validate request
+ ├─ determine fare
+ ├─ calculate price
+ ├─ reserve seat
+ ├─ create ticket
+ └─ persist result</code></pre>
+<p>DD neznamená přidat deset tříd. Znamená například explicitně rozhodnout:</p>
+<p>• kdo vybírá tarif;</p>
+<p>• kde je algoritmus ceny;</p>
+<p>• jaké jsou vstupy/výstupy;</p>
+<p>• pre/postconditions;</p>
+<p>• failure behavior;</p>
+<p>• které unit testy z toho vyplývají.</p>
+<h1>1 — Vyberte jednu architecture responsibility / software unit</h1>
+<h3>Proč?</h3>
+<p>DD má rozpracovat jednu existující architektonickou odpovědnost <strong>dovnitř</strong>, ne znovu navrhovat celý systém.</p>
+<h3>Co udělat?</h3>
+<p>Vyberte jednu část z C03, která obsahuje skutečnou logiku. Např. Reservation lifecycle, Availability, Approval handling, Ticket pricing.</p>
+<h3>Výstup</h3>
+<pre><code>Selected architecture unit / responsibility:
+Related requirement(s):
+Related scenario(s):
+Relevant business rule(s):</code></pre>
+<h3>Smysl kroku</h3>
+<p>Musí být jasné, <strong>uvnitř jaké hranice teď děláte DD</strong>.</p>
+<h1>2 — Odvoďte detailed responsibilities</h1>
+<h3>Proč?</h3>
+<p>Nejdřív potřebujete vědět, <strong>co všechno musí jednotka uvnitř rozhodnout nebo udělat</strong>. Až potom dává smysl řešit classes a methods.</p>
+<h3>Co udělat?</h3>
+<p>Rozložte vybranou responsibility na 3–7 menších responsibilities.</p>
+<p>Příklad — Ticket Pricing:</p>
+<pre><code>- identify passenger category
+- select applicable fare
+- calculate base price
+- apply discount / surcharge
+- validate pricing conditions
+- return final price + reason</code></pre>
+<h3>Výstup</h3>
+<pre class='table'>| Detailed responsibility | Why is it needed? |</pre>
+<pre class='table'>|---|---|</pre>
+<pre class='table'>| ... | ... |</pre>
+<h3>Smysl kroku</h3>
+<p>Vzniká <strong>functional / responsibility view na úrovni DD</strong> — návrhový záměr před konkrétní strukturou.</p>
+<h1>3 — Navrhněte structure, data/state a interfaces</h1>
+<h3>Proč?</h3>
+<p>Teď rozhodujete <strong>kdo co vlastní, která data/state používá a přes jaký contract spolu prvky komunikují</strong>. To je základ implementace i test isolation.</p>
+<h3>Co udělat?</h3>
+<p>Přiřaďte responsibilities konkrétním design elements: class, module, component, policy, value object, repository, adapter, interface.</p>
+<h3>Výstup</h3>
+<pre class='table'>| Responsibility | Owner | State/data | Why here? |</pre>
+<pre class='table'>|---|---|---|---|</pre>
+<pre class='table'>| ... | ... | ... | ... |</pre>
+<h3>Interface / contract</h3>
+<p>Definujte alespoň jedno významné interface.</p>
+<p>Příklad:</p>
+<pre><code>&lt;&lt;interface&gt;&gt; FarePolicy
+
+calculate(passenger, connection, ticketType) : PriceResult</code></pre>
+<p>Contract:</p>
+<pre><code>Preconditions:
+- passenger category known
+- connection valid
+
+Postcondition:
+- PriceResult contains final price and applied fare
+
+Failures:
+- UNSUPPORTED_FARE
+- INVALID_INPUT</code></pre>
+<h3>Focused UML structural view</h3>
+<p>Nakreslete jeden focused UML class/component/package diagram. Přibližně 4–8 významných prvků. Ukažte interfaces, dependencies a důležité state/data ownership.</p>
+<h3>Smysl kroku</h3>
+<p>Z diagramu musí být zřejmé <strong>jak je design rozdělen a přes jaké contracts se jeho části propojují</strong>.</p>
+<h1>4 — Navrhněte methods, algorithms a dynamic behavior</h1>
+<h3>Proč?</h3>
+<p>Strukturální diagram nestačí. Unit verification často vychází právě z methods, pre/postconditions, algorithms, branches, state transitions a error behavior.</p>
+<h3>Significant methods / operations</h3>
+<p>U významných operací uveďte:</p>
+<pre><code>Operation:
+Responsibility:
+Input:
+Output:
+Preconditions:
+Postconditions:
+Side effects:
+Failure behavior:</code></pre>
+<p>Nedokumentujte getters/setters, triviální delegaci ani framework boilerplate.</p>
+<h3>Algorithm / decision logic</h3>
+<p>Pokud existuje významný algoritmus nebo business rule, udělejte jej explicitní pomocí pseudocode, activity diagramu, decision table nebo state machine.</p>
+<p>Příklad:</p>
+<pre><code>base = fareTable[connection]
+if passenger.student:
+    base = base * studentFactor
+if ticket.firstClass:
+    base = base + firstClassSurcharge
+return Money.round(base)</code></pre>
+<h3>Detailed sequence</h3>
+<p>Ukažte jeden významný scénář uvnitř jednotky.</p>
+<p>C03 architecture level:</p>
+<pre><code>API → Reservation Management → Availability → Persistence</code></pre>
+<p>C05 DD level:</p>
+<pre><code>ReservationService → PolicyResolver → AvailabilityPolicy → ReservationRepository</code></pre>
+<h3>Smysl kroku</h3>
+<p>Musí být explicitní <strong>jak návrh skutečně realizuje významné chování uvnitř jednotky</strong>.</p>
+<h1>5 — Odvoďte unit/component testy z DD</h1>
+<h3>Proč?</h3>
+<p>Tohle je jeden z hlavních důvodů DD. Jakmile máte contracts, methods, algorithms, state transitions a failure behavior, můžete z nich přímo odvodit verification.</p>
+<blockquote>**Unit tests ověřují návrhový záměr jednotky, ne jen současnou implementaci.**</blockquote>
+<h3>Výstup</h3>
+<p>Minimálně 5 testů:</p>
+<pre class='table'>| DD element / decision | What must hold? | Test level | Test case |</pre>
+<pre class='table'>|---|---|---|---|</pre>
+<pre class='table'>| interface contract | ... | unit/component | ... |</pre>
+<pre class='table'>| algorithm branch | ... | unit | ... |</pre>
+<pre class='table'>| state transition | ... | unit/component | ... |</pre>
+<pre class='table'>| failure behavior | ... | unit | ... |</pre>
+<pre class='table'>| collaboration | ... | component/integration | ... |</pre>
+<p>U alespoň dvou testů vysvětlete:</p>
+<pre><code>Selected level:
+Why this level:
+What design decision does this test verify?</code></pre>
+<h3>Smysl kroku</h3>
+<p>Musí být vidět přímá vazba <strong>DD decision → verification</strong>.</p>
+<h1>6 — Implementujte a ověřte design ↔ code</h1>
+<h3>Proč?</h3>
+<p>DD je návrhový záměr. Implementace jej musí realizovat — nebo musí být vědomě změněn samotný design.</p>
+<h3>Co udělat?</h3>
+<p>Implementujte navržený slice a porovnejte planned DD vs actual implementation.</p>
+<h3>Výstup</h3>
+<pre class='table'>| DD decision | Implemented? | Evidence | Action |</pre>
+<pre class='table'>|---|---|---|---|</pre>
+<pre class='table'>| ... | YES/PARTLY/NO | file/test | keep / update DD / update code |</pre>
+<h3>Smysl kroku</h3>
+<p>Pokud se design a code liší, <strong>neopravujte automaticky diagram podle kódu</strong>. Rozhodněte, co je správně.</p>
+<h1>Jak hluboko má DD jít?</h1>
+<p>DD má být tak hluboký, aby bylo možné:</p>
+<p>1. implementovat významná rozhodnutí bez hádání;</p>
+<p>2. odvodit unit/component tests;</p>
+<p>3. pochopit algorithm / method / state behavior;</p>
+<p>4. vidět významná interfaces a dependencies;</p>
+<p>5. zachovat design intent při změně;</p>
+<p>6. posoudit maintainability / extensibility tam, kde je relevantní.</p>
+<p>Typicky mohou být explicitní:</p>
+<pre><code>responsibilities
+classes / modules / components
+interfaces and contracts
+methods / operations
+data structures
+state and transitions
+algorithms
+decision logic
+error handling
+dependency direction
+concurrency behavior
+persistence behavior
+configuration / variation points</code></pre>
+<h1>Co může zůstat jen v kódu?</h1>
+<p>Typicky:</p>
+<p>• jednoduché lokální statements;</p>
+<p>• triviální private helper;</p>
+<p>• getter/setter;</p>
+<p>• framework boilerplate;</p>
+<p>• syntax-level detail;</p>
+<p>• detail bez významu pro verification nebo budoucí změnu.</p>
+<h1>Jak poznat, že je DD dostatečný?</h1>
+<p>1. **Implementation:** jiný developer chápe významná design decisions bez hádání.</p>
+<p>2. **Unit verification:** z DD lze odvodit smysluplné unit/component tests.</p>
+<p>3. **Change:** je jasné, kde se má změnit konkrétní rule nebo varianta.</p>
+<h1>Co odevzdáte?</h1>
+<p>Do `docs/architecture-and-decisions.md`:</p>
+<pre><code>## C05 Detailed Design
+Selected architecture unit:
+Detailed responsibilities:
+Design elements and ownership:
+Key interface(s) / contract(s):
+Focused structural view:
+Detailed sequence:
+Important methods / operations:
+Algorithm / decision logic: (if relevant)
+DD decisions intentionally left to code:</code></pre>
+<p>Do `docs/evidence-and-evolution.md`:</p>
+<pre><code>## C05 DD Verification Evidence
+Tests derived from DD:
+Unit/component tests executed:
+Design ↔ implementation mismatch:
+Resolution:
+Remaining design risk:
+Commit/tag:</code></pre>
+<h1>Definition of Done</h1>
+<p class='check'>☐ jedna architecture responsibility / unit;</p>
+<p class='check'>☐ detailed responsibilities;</p>
+<p class='check'>☐ ownership;</p>
+<p class='check'>☐ významné interface / contract;</p>
+<p class='check'>☐ focused structural UML view;</p>
+<p class='check'>☐ detailed sequence;</p>
+<p class='check'>☐ významné methods / operations;</p>
+<p class='check'>☐ algorithm / decision logic, pokud je relevantní;</p>
+<p class='check'>☐ minimálně 5 testů odvozených z DD;</p>
+<p class='check'>☐ testy spuštěné;</p>
+<p class='check'>☐ DD porovnáno s implementací;</p>
+<p class='check'>☐ commit/tag.</p>
+<h1>Hlavní pointa</h1>
+<pre><code>Architecture
+   ↓
+Detailed Design
+   ↓
+Implementation
+   ↓
+Unit Verification</code></pre>
+<p>DD říká <strong>co má jednotka dělat uvnitř, jaké má významné prvky, interfaces, methods a algorithms a co přesně má být ověřeno</strong>.</p>
+<p>Maintainability a extensibility jsou důsledkem kvalitního návrhového záměru — ne náhradou hlavního účelu DD.</p></section><section id="en" class="lang"><h1>C05 — Detailed Design</h1>
+<h2>From Architecture to Design Intent and Unit Tests</h2>
+<h3>Why Detailed Design?</h3>
+<p>In C03 you decided <strong>where</strong> major responsibilities and boundaries live. Detailed Design goes one level deeper and explains <strong>how a concrete software unit/component is intended to work internally</strong>, so that:</p>
+<p>• design intent is explicit;</p>
+<p>• significant methods, operations, algorithms, data and state are visible;</p>
+<p>• interfaces and contracts are clear;</p>
+<p>• unit/component tests can be derived directly from the design;</p>
+<p>• implementation is not just “code that happens to work”.</p>
+<blockquote>**DD is a technical basis for implementation and unit verification. It is not a retrospective description of finished code.**</blockquote>
+<h3>What will you do?</h3>
+<p>1. Select one architecture responsibility / software unit.</p>
+<p>2. Derive detailed responsibilities.</p>
+<p>3. Design structure, data/state and interfaces.</p>
+<p>4. Design methods, algorithms and dynamic behavior.</p>
+<p>5. Derive unit/component tests from DD.</p>
+<p>6. Implement and verify design ↔ code consistency.</p>
+<h2>Even a simple system has DD</h2>
+<p>For a simple train-ticket system, do not invent complexity. But even `BuyTicket` may require explicit decisions about fare selection, pricing algorithm, inputs/outputs, pre/postconditions, failure behavior and unit tests.</p>
+<h1>1 — Select one architecture responsibility / software unit</h1>
+<h3>Why?</h3>
+<p>DD refines <strong>one existing architectural responsibility internally</strong>. You are not redesigning the whole system.</p>
+<h3>What to do?</h3>
+<p>Select one C03 unit with real logic, e.g. Reservation lifecycle, Availability, Approval handling, Ticket pricing.</p>
+<h3>Output</h3>
+<pre><code>Selected architecture unit / responsibility:
+Related requirement(s):
+Related scenario(s):
+Relevant business rule(s):</code></pre>
+<h3>Meaning</h3>
+<p>It must be clear <strong>inside which boundary Detailed Design is now performed</strong>.</p>
+<h1>2 — Derive detailed responsibilities</h1>
+<h3>Why?</h3>
+<p>First determine <strong>what the unit must decide or perform internally</strong>. Only then decide classes and methods.</p>
+<h3>Example — Ticket Pricing</h3>
+<pre><code>- identify passenger category
+- select applicable fare
+- calculate base price
+- apply discount / surcharge
+- validate pricing conditions
+- return final price + reason</code></pre>
+<h3>Output</h3>
+<pre class='table'>| Detailed responsibility | Why is it needed? |</pre>
+<pre class='table'>|---|---|</pre>
+<pre class='table'>| ... | ... |</pre>
+<h3>Meaning</h3>
+<p>This is the <strong>functional / responsibility view at DD level</strong> — design intent before concrete structure.</p>
+<h1>3 — Design structure, data/state and interfaces</h1>
+<h3>Why?</h3>
+<p>Now decide <strong>who owns each responsibility, which data/state it uses, and through which contract elements collaborate</strong>. This supports implementation and test isolation.</p>
+<h3>Output</h3>
+<pre class='table'>| Responsibility | Owner | State/data | Why here? |</pre>
+<pre class='table'>|---|---|---|---|</pre>
+<pre class='table'>| ... | ... | ... | ... |</pre>
+<h3>Interface / contract</h3>
+<p>Define at least one meaningful interface.</p>
+<p>Example:</p>
+<pre><code>&lt;&lt;interface&gt;&gt; FarePolicy
+calculate(passenger, connection, ticketType) : PriceResult</code></pre>
+<p>Contract:</p>
+<pre><code>Preconditions:
+- passenger category known
+- connection valid
+
+Postcondition:
+- PriceResult contains final price and applied fare
+
+Failures:
+- UNSUPPORTED_FARE
+- INVALID_INPUT</code></pre>
+<h3>Focused UML structural view</h3>
+<p>Create one focused UML class/component/package diagram with about 4–8 significant elements. Show interfaces, dependencies and important state/data ownership.</p>
+<h3>Meaning</h3>
+<p>The design structure and its contracts must be visible.</p>
+<h1>4 — Design methods, algorithms and dynamic behavior</h1>
+<h3>Why?</h3>
+<p>A structural diagram is not enough. Unit verification often follows from methods, pre/postconditions, algorithms, branches, state transitions and error behavior.</p>
+<h3>Significant methods / operations</h3>
+<p>For important operations specify:</p>
+<pre><code>Operation:
+Responsibility:
+Input:
+Output:
+Preconditions:
+Postconditions:
+Side effects:
+Failure behavior:</code></pre>
+<p>Do not document getters/setters, trivial delegation or framework boilerplate.</p>
+<h3>Algorithm / decision logic</h3>
+<p>Use pseudocode, activity diagram, decision table or state machine where relevant.</p>
+<p>Example:</p>
+<pre><code>base = fareTable[connection]
+if passenger.student:
+    base = base * studentFactor
+if ticket.firstClass:
+    base = base + firstClassSurcharge
+return Money.round(base)</code></pre>
+<h3>Detailed sequence</h3>
+<p>C03 architecture level:</p>
+<pre><code>API → Reservation Management → Availability → Persistence</code></pre>
+<p>C05 DD level:</p>
+<pre><code>ReservationService → PolicyResolver → AvailabilityPolicy → ReservationRepository</code></pre>
+<h3>Meaning</h3>
+<p>Make explicit <strong>how significant behavior is realized inside the unit</strong>.</p>
+<h1>5 — Derive unit/component tests from DD</h1>
+<h3>Why?</h3>
+<p>This is one of the main reasons for DD. Contracts, methods, algorithms, state transitions and failure behavior directly define verification needs.</p>
+<blockquote>**Unit tests verify design intent, not only the current implementation.**</blockquote>
+<h3>Output</h3>
+<p>Create at least 5 tests:</p>
+<pre class='table'>| DD element / decision | What must hold? | Test level | Test case |</pre>
+<pre class='table'>|---|---|---|---|</pre>
+<pre class='table'>| interface contract | ... | unit/component | ... |</pre>
+<pre class='table'>| algorithm branch | ... | unit | ... |</pre>
+<pre class='table'>| state transition | ... | unit/component | ... |</pre>
+<pre class='table'>| failure behavior | ... | unit | ... |</pre>
+<pre class='table'>| collaboration | ... | component/integration | ... |</pre>
+<p>For at least two tests:</p>
+<pre><code>Selected level:
+Why this level:
+What design decision does this test verify?</code></pre>
+<h3>Meaning</h3>
+<p>The link <strong>DD decision → verification</strong> must be explicit.</p>
+<h1>6 — Implement and verify design ↔ code</h1>
+<h3>Why?</h3>
+<p>DD is design intent. Implementation must realize it, or the design must be consciously changed.</p>
+<h3>Output</h3>
+<pre class='table'>| DD decision | Implemented? | Evidence | Action |</pre>
+<pre class='table'>|---|---|---|---|</pre>
+<pre class='table'>| ... | YES/PARTLY/NO | file/test | keep / update DD / update code |</pre>
+<h3>Meaning</h3>
+<p>If design and code differ, do not automatically update the diagram to match the code. Decide what is correct.</p>
+<h1>How deep should DD go?</h1>
+<p>DD should be detailed enough to:</p>
+<p>1. implement significant decisions without guessing;</p>
+<p>2. derive unit/component tests;</p>
+<p>3. understand algorithm / method / state behavior;</p>
+<p>4. see significant interfaces and dependencies;</p>
+<p>5. preserve design intent during change;</p>
+<p>6. assess maintainability / extensibility where relevant.</p>
+<p>Typical explicit content:</p>
+<pre><code>responsibilities
+classes / modules / components
+interfaces and contracts
+methods / operations
+data structures
+state and transitions
+algorithms
+decision logic
+error handling
+dependency direction
+concurrency behavior
+persistence behavior
+configuration / variation points</code></pre>
+<h1>What can stay only in code?</h1>
+<p>Typically:</p>
+<p>• simple local statements;</p>
+<p>• trivial private helper;</p>
+<p>• getter/setter;</p>
+<p>• framework boilerplate;</p>
+<p>• syntax-level detail;</p>
+<p>• details irrelevant to verification or future change.</p>
+<h1>How do you know DD is sufficient?</h1>
+<p>1. **Implementation:** another developer understands significant decisions without guessing.</p>
+<p>2. **Unit verification:** meaningful unit/component tests can be derived from DD.</p>
+<p>3. **Change:** it is clear where a concrete rule or variant should change.</p>
+<h1>What do you submit?</h1>
+<p>Update `docs/architecture-and-decisions.md` with the DD and `docs/evidence-and-evolution.md` with tests, results, mismatches, remaining risk and commit/tag.</p>
+<h1>Definition of Done</h1>
+<p class='check'>☐ one architecture responsibility / unit selected;</p>
+<p class='check'>☐ detailed responsibilities derived;</p>
+<p class='check'>☐ ownership allocated;</p>
+<p class='check'>☐ meaningful interface / contract defined;</p>
+<p class='check'>☐ focused structural UML view;</p>
+<p class='check'>☐ detailed sequence;</p>
+<p class='check'>☐ significant methods / operations explicit;</p>
+<p class='check'>☐ algorithm / decision logic explicit where relevant;</p>
+<p class='check'>☐ at least 5 tests derived from DD;</p>
+<p class='check'>☐ tests executed;</p>
+<p class='check'>☐ DD compared with implementation;</p>
+<p class='check'>☐ commit/tag.</p>
+<h1>Main takeaway</h1>
+<pre><code>Architecture
+   ↓
+Detailed Design
+   ↓
+Implementation
+   ↓
+Unit Verification</code></pre>
+<p>DD explains <strong>what the unit does internally, its significant elements, interfaces, methods and algorithms, and what exactly must be verified</strong>.</p>
+<p>Maintainability and extensibility are consequences of good design intent — not replacements for the primary purpose of DD.</p></section></main></body></html>

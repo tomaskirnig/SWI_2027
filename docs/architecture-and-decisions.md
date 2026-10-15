@@ -885,3 +885,190 @@ classDiagram
 | **Transakční izolace souběhu** | `SELECT ... FOR UPDATE` v atomické transakci zajišťující `BR-02`. | Zachování `SELECT ... FOR UPDATE` pod rozhraním repozitáře. | `KEEP` |
 | **Čisté doménové funkce (`domain.ts`)** | Nezávislé čisté funkce pro intervaly a překryvy. | Ponechány beze změny jako základ doménového jádra. | `KEEP` |
 | **Architektonické pravidlo** | Žádná automatická kontrola zákazů závislostí. | Vytvoření opakovatelného architektonického testu chránícího vrstvy (např. zákaz importu `pg` mimo repository/db). | `CHANGE` |
+
+---
+
+# C05 Detailed Design
+
+## 1. Selected architecture unit / responsibility
+- **Selected architecture unit / responsibility:** `Reservation Confirmation & Availability Policy` (v rámci `Reservation Management` a doménového jádra v [src/domain.ts](../src/domain.ts) a [src/service.ts](../src/service.ts)).
+- **Related requirement(s):** `REQ-01`, `REQ-02`, `REQ-03`, `REQ-07`, `REQ-10`, `REQ-11`
+- **Related scenario(s):** Confirm Reservation (`OP-03`), Check Availability (`OP-02`)
+- **Relevant business rule(s):** `BR-01` (polouzavřený interval), `BR-02` (zákaz překryvu), `BR-03` (předstih 15 minut), `BR-04` (denní limit 30 minut rozpadlý přes půlnoc v `Europe/Prague`), `BR-05` (schvalovací proces pro křečka s dohledem).
+
+## 2. Detailed responsibilities
+| Detailed responsibility | Why is it needed? |
+|---|---|
+| **DR-01: Validate Time Interval** | Ověřit syntax a platnost intervalu [start, end) — start < end, platná data, kladná nenulová délka (`BR-01`). |
+| **DR-02: Check Advance Lead Time** | Vynutit pravidlo `BR-03` (`currentTime <= start - 15 min`), aby student nepotvrzoval termín na poslední chvíli. |
+| **DR-03: Assess Hamster Availability & Status** | Zkontrolovat, zda křeček existuje a je aktivní (`isActive = true`), a vyhodnotit nutnost schválení (`requiresApproval`). |
+| **DR-04: Detect Slot Collisions** | Ověřit nekoliznost intervalu vůči všem existujícím rezervacím křečka ve stavu `CONFIRMED` i `PENDING_APPROVAL` (`BR-02`). |
+| **DR-05: Enforce Daily User Quota** | Vypočítat a zkontrolovat, že součet minut studenta u křečka nepřekročí 30 minut v žádném kalendářním dni pásma `Europe/Prague` (`BR-04`). |
+| **DR-06: Resolve Target State & Outcome** | Rozhodnout deterministicky cílový stav (`CONFIRMED` vs `PENDING_APPROVAL` dle `BR-05`) a sestavit výsledek včetně případných chybových kódů. |
+
+## 3. Design elements and ownership
+| Responsibility | Owner | State/data | Why here? |
+|---|---|---|---|
+| DR-01, DR-02, DR-03, DR-04, DR-05, DR-06 | `ConfirmationPolicy` (`IConfirmationPolicy`) | Vstupní kandidát, pole existujících slotů, mapa denních minut, referenční čas | Čistá doménová logika bez I/O. Zajišťuje stoprocentní unit testovatelnost v paměti bez DB. |
+| Načtení dat pod zámkem (`FOR UPDATE`) a orchestrace | `ReservationService` | Transakční klient DB | Vlastní transakční hranici a aplikační orchestraci běhu operace OP-03. |
+| Zápis změn stavu a outbox notifikace | `IReservationRepository` | PostgreSQL tabulky `reservations`, `notifications_outbox` | Izoluje SQL dotazy a perzistenci od doménových pravidel. |
+
+## 4. Key interface(s) / contract(s)
+
+### Interface `IConfirmationPolicy`
+```typescript
+export interface IConfirmationPolicy {
+  evaluate(
+    candidate: ConfirmationCandidate,
+    hamster: HamsterProfile,
+    existingConfirmedIntervals: TimeInterval[],
+    userDailyMinutes: Map<string, number>,
+    currentTime: Date
+  ): ConfirmationResult;
+}
+```
+
+#### Contract:
+- **Preconditions:**
+  - `candidate` obsahuje validní ID studenta a křečka, počáteční a koncový čas a výchozí stav (`DRAFT`).
+  - `hamster` obsahuje platný identifikační profil křečka (aktivita, nutnost schválení).
+  - `currentTime` je platná instance `Date`.
+- **Postconditions:**
+  - Pokud jsou splněna všechna pravidla `BR-01` až `BR-05`, vrátí `{ ok: true, targetStatus, message }`, kde `targetStatus` je `CONFIRMED` (pokud `requiresApproval = false`) nebo `PENDING_APPROVAL` (pokud `requiresApproval = true`).
+  - Žádné vedlejší efekty na databázi ani globální stav (čistá deterministická funkce).
+- **Failures (Error Codes):**
+  - `INVALID_INTERVAL`: `start >= end` nebo neplatné datum.
+  - `LEAD_TIME_VIOLATION`: `currentTime > start - 15 minut`.
+  - `HAMSTER_INACTIVE`: křeček má `isActive = false`.
+  - `INVALID_STATE`: kandidát není ve výchozím stavu `DRAFT` (např. již byl zrušen či potvrzen).
+  - `SLOT_CONFLICT`: překryv s existujícím potvrzeným termínem křečka.
+  - `DAILY_LIMIT_EXCEEDED`: součet minut překročí 30 minut v daném kalendářním dni `Europe/Prague`.
+
+## 5. Focused structural view
+
+```mermaid
+classDiagram
+    direction TB
+
+    class IConfirmationPolicy {
+        <<interface>>
+        +evaluate(candidate, hamster, existingSlots, userDailyMinutes, currentTime) ConfirmationResult
+    }
+
+    class ConfirmationPolicy {
+        +evaluate(candidate, hamster, existingSlots, userDailyMinutes, currentTime) ConfirmationResult
+    }
+
+    class ConfirmationCandidate {
+        +int id
+        +string userId
+        +string hamsterId
+        +DateTime start
+        +DateTime end
+        +ReservationStatus status
+    }
+
+    class HamsterProfile {
+        +string id
+        +string name
+        +boolean isActive
+        +boolean requiresApproval
+    }
+
+    class ConfirmationResult {
+        <<type>>
+        +boolean ok
+        +string targetStatus
+        +ConfirmationErrorCode code
+        +string message
+    }
+
+    class ReservationService {
+        -IReservationRepository repository
+        -IConfirmationPolicy policy
+        +confirmReservation(id, userId, now) Promise~Reservation~
+    }
+
+    IConfirmationPolicy <|.. ConfirmationPolicy : implements
+    ReservationService --> IConfirmationPolicy : uses
+    ConfirmationPolicy ..> ConfirmationCandidate : validates
+    ConfirmationPolicy ..> HamsterProfile : inspects
+    ConfirmationPolicy ..> ConfirmationResult : produces
+```
+
+## 6. Detailed sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Student
+    participant API as ReservationController (app.ts)
+    participant Svc as ReservationService (service.ts)
+    participant Repo as ReservationRepository (repository.ts)
+    participant Policy as ConfirmationPolicy (domain.ts)
+    participant DB as PostgreSQL (Supabase)
+
+    Student->>API: POST /api/reservations/:id/confirm { user_id }
+    API->>Svc: confirmReservation(id, userId, now)
+    Svc->>Repo: BEGIN TRANSACTION
+    Svc->>Repo: findReservationByIdForUpdate(client, id)
+    Repo->>DB: SELECT * FROM reservations WHERE id = $1 FOR UPDATE
+    DB-->>Repo: reservation row (DRAFT)
+    
+    Svc->>Repo: findHamsterByIdForUpdate(client, hamsterId)
+    Repo->>DB: SELECT * FROM hamsters WHERE id = $1 FOR UPDATE
+    DB-->>Repo: hamster row (Archimedes)
+
+    Svc->>Repo: findConflictingReservations(client, hamsterId, start, end)
+    Repo->>DB: SELECT * FROM reservations WHERE hamster_id = $1 AND status IN ('CONFIRMED', 'PENDING_APPROVAL')
+    DB-->>Repo: existing intervals []
+
+    Svc->>Repo: findUserReservationsForHamster(client, userId, hamsterId)
+    Repo->>DB: SELECT * FROM reservations WHERE user_id = $1 AND hamster_id = $2
+    DB-->>Repo: user reservations rows
+
+    Note over Svc,Policy: Čisté vyhodnocení Detailed Design kontraktu v paměti
+    Svc->>Policy: evaluate(candidate, hamster, existingIntervals, userDailyMinutes, now)
+    
+    alt Invariant porušen (např. SLOT_CONFLICT nebo DAILY_LIMIT_EXCEEDED)
+        Policy-->>Svc: { ok: false, code: 'SLOT_CONFLICT', message: '...' }
+        Svc->>Repo: ROLLBACK TRANSACTION
+        Svc-->>API: DomainError (409 Conflict / 400 Bad Request)
+        API-->>Student: 409 / 400 JSON { error }
+    else Všechna pravidla splněna
+        Policy-->>Svc: { ok: true, targetStatus: 'PENDING_APPROVAL', message: '...' }
+        Svc->>Repo: updateReservationStatus(client, id, 'PENDING_APPROVAL')
+        Repo->>DB: UPDATE reservations SET status = 'PENDING_APPROVAL' WHERE id = $1
+        Svc->>Repo: insertOutboxNotification(client, recipient, message)
+        Repo->>DB: INSERT INTO notifications_outbox ...
+        Svc->>Repo: COMMIT TRANSACTION
+        Svc-->>API: Updated Reservation
+        API-->>Student: 200 OK JSON { status: 'PENDING_APPROVAL' }
+    end
+```
+
+## 7. Important methods / operations
+- **Operace:** `ConfirmationPolicy.evaluate(candidate, hamster, existingSlots, userDailyMinutes, currentTime)`
+  - **Responsibility:** Autoritativní vyhodnocení podmínek pro potvrzení rezervace a určení cílového stavu.
+  - **Input:** `candidate` (navrhovaný termín a uživatel), `hamster` (stav a pravidla křečka), `existingSlots` (obsazené intervaly), `userDailyMinutes` (mapa vyčerpaných minut po dnech), `currentTime` (časový referenční bod).
+  - **Output:** `ConfirmationResult` (`ConfirmationSuccess` s cílovým stavem nebo `ConfirmationFailure` s chybovým kódem a kontextem).
+  - **Preconditions:** Kandidát má validní reference; časy jsou platné instance Date.
+  - **Postconditions:** Zaručuje, že žádná potvrzená rezervace neporuší pravidla `BR-01` až `BR-05`.
+  - **Side effects:** Žádné (čistá bezstavová funkce).
+  - **Failure behavior:** Deterministické vrácení objektu s `ok: false` a konkrétním kódem chyby (`INVALID_INTERVAL`, `LEAD_TIME_VIOLATION`, `HAMSTER_INACTIVE`, `INVALID_STATE`, `SLOT_CONFLICT`, `DAILY_LIMIT_EXCEEDED`).
+
+## 8. Algorithm / decision logic
+Vyhodnocovací rozhodovací strom probíhá v deterministickém pořadí priorit:
+1. `IF !isIntervalValid(start, end) THEN RETURN INVALID_INTERVAL`
+2. `IF currentTime > start - 15 min THEN RETURN LEAD_TIME_VIOLATION`
+3. `IF !hamster.isActive THEN RETURN HAMSTER_INACTIVE`
+4. `IF candidate.status != 'DRAFT' THEN RETURN INVALID_STATE`
+5. `FOR EACH slot IN existingSlots: IF overlaps(candidate, slot) THEN RETURN SLOT_CONFLICT`
+6. `FOR EACH [day, mins] IN calculateMinutesPerDay(candidate): IF existing[day] + mins > 30 THEN RETURN DAILY_LIMIT_EXCEEDED`
+7. `IF hamster.requiresApproval THEN RETURN targetStatus = 'PENDING_APPROVAL' ELSE RETURN targetStatus = 'CONFIRMED'`
+
+## 9. DD decisions intentionally left to code
+- Formátování textových chybových zpráv a lokalizace do češtiny.
+- Interní iterace v `Map<string, number>` a zaokrouhlování na milisekundy.
+- Mapování HTTP status kódů (400 vs 404 vs 409) v kontroleru.
+

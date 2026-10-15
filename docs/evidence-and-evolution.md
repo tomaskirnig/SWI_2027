@@ -210,3 +210,63 @@ V případě budoucího horizontálního škálování Node.js aplikace na více
 
 **Commit / tag:**  
 Pracovní větev `C03`, připraveno pro odevzdání cvičení C03.
+
+---
+
+## C05 DD Verification Evidence
+
+### 1. Selected architecture unit / responsibility
+- **Unit:** `Reservation Confirmation & Availability Policy` (v rámci `Reservation Management` a [src/domain.ts](../src/domain.ts)).
+- **Scope:** Přísné deterministické vyhodnocení podmínek pro přechod rezervace z `DRAFT` do `CONFIRMED` / `PENDING_APPROVAL` (`BR-01` až `BR-05`).
+
+### 2. Tests derived from DD
+Odvozeno celkem 10 unit testů pokrývajících kontrakt rozhraní, větvení algoritmu, přechody stavů, doménové invarianty i chování při chybě:
+
+| ID testu | DD element / rozhodnutí | Co musí platit? | Test level | Testovací případ |
+|---|---|---|---|---|
+| **T-DD-01** | Interface Contract (`BR-01`) | Neplatný interval (`start >= end`) je okamžitě odmítnut bez DB. | Unit | `INVALID_INTERVAL` při obrácených časech. |
+| **T-DD-02** | Algorithm Branch (`BR-03`) | Časový předstih < 15 minut před začátkem je odmítnut. | Unit | `LEAD_TIME_VIOLATION` při potvrzení 14 min před začátkem. |
+| **T-DD-03** | Failure Behavior | Neaktivní křeček nesmí být potvrzen. | Unit | `HAMSTER_INACTIVE` pro křečka Spávka (`isActive = false`). |
+| **T-DD-04A** | State Transition (`BR-05`) | Běžný křeček přejde přímo do stavu `CONFIRMED`. | Unit | `ferda` bez nutnosti schválení &rarr; `CONFIRMED`. |
+| **T-DD-04B** | State Transition (`BR-05`) | Křeček s dohledem přejde do stavu `PENDING_APPROVAL`. | Unit | `archimedes` vyžadující dohled &rarr; `PENDING_APPROVAL`. |
+| **T-DD-05A** | Collision Detection (`BR-02`) | Překryv s existujícím slotem vrátí kolizi. | Unit | `SLOT_CONFLICT` při intervalech 14:00–14:30 a 14:15–14:45. |
+| **T-DD-05B** | Collision Detection (`BR-01`) | Dotyk hranic intervalů (14:30) není kolize. | Unit | Úspěšné potvrzení navazujícího slotu 14:30–15:00. |
+| **T-DD-06A** | Daily Limit (`BR-04`) | Překročení součtu 30 minut v kalendářním dni je odmítnuto. | Unit | `DAILY_LIMIT_EXCEEDED` při 20 min existujících + 15 min nových. |
+| **T-DD-06B** | Daily Limit Calculation | Rezervace přes půlnoc rozpočte minuty do obou kalendářních dnů. | Unit | 23:50–00:10 v `Europe/Prague` &rarr; 10 min den 1, 10 min den 2. |
+| **T-DD-07** | State Machine Invariant | Rezervaci ve stavu `CANCELLED` již nelze znovu potvrdit. | Unit | `INVALID_STATE` při pokusu potvrdit zrušený termín. |
+
+### 3. Justification of Test Levels (podrobné odůvodnění min. 2 testů)
+
+#### Test T-DD-02 (Předstih 15 minut – Algorithm branch):
+- **Selected level:** `Unit test`
+- **Why this level:** Pravidlo předstihu je čistá časová matematika závislá pouze na dvou instancích času (`currentTime` a `start`). Testování na unit úrovni umožňuje deterministicky předat libovolný virtuální čas `now` bez nutnosti běžící databáze nebo HTTP serveru a bez závislosti na systémových hodinách OS.
+- **What design decision does this test verify?** Ověřuje návrhové rozhodnutí, že `ConfirmationPolicy` přijímá referenční čas `currentTime` jako explicitní parametr kontraktu a vynucuje striktní nerovnost `currentTime <= start - 15 min` (`BR-03`).
+
+#### Test T-DD-06B (Výpočet čerpání limitu přes půlnoc – Domain Calculation):
+- **Selected level:** `Unit test`
+- **Why this level:** Výpočet minut v jednotlivých dnech pásma `Europe/Prague` závisí na přesném rozpadu časových zón (letní/zimní čas a přechod půlnoci). Izolovaný unit test přímo ověřuje návratovou mapu minut pro dotčené dny bez režie síťového I/O.
+- **What design decision does this test verify?** Ověřuje návrhové rozhodnutí `DR-05`, že denní limit se nepočítá jako plovoucí 24hodinové okno, nýbrž striktně po kalendářních dnech v pražské časové zóně (`BR-04`).
+
+### 4. Unit / Component tests executed
+- **Příkaz:** `npm run test:unit` (`tsx src/domain.test.ts`)
+- **Výsledek:** `10 PASS`, `0 FAIL` (100% úspěšnost).
+- **Rychlost běhu:** < 250 ms (čistý in-memory běh bez I/O).
+
+### 5. Design ↔ Implementation consistency matrix
+| DD element / decision | Implemented? | Evidence | Action |
+|---|:---:|---|---|
+| Rozhraní `IConfirmationPolicy` a třída `ConfirmationPolicy` | `YES` | [src/domain.ts](../src/domain.ts) | `KEEP` |
+| Vstupní kandidát `ConfirmationCandidate` a `HamsterProfile` | `YES` | [src/domain.ts](../src/domain.ts) | `KEEP` |
+| Výsledkový kontrakt `ConfirmationResult` a chybové kódy | `YES` | [src/domain.ts](../src/domain.ts) | `KEEP` |
+| Izolované unit testy odvozené z DD (T-DD-01 až T-DD-07) | `YES` | [src/domain.test.ts](../src/domain.test.ts) | `KEEP` |
+| NPM skript `test:unit` pro automatické spouštění | `YES` | [package.json](../package.json) | `KEEP` |
+| Zpětná kompatibilita s C02 integračními testy (30 scénářů) | `YES` | [src/verify.ts](../src/verify.ts) (`30 PASS / 0 FAIL`) | `KEEP` |
+| Architektonická pravidla L2 (izolace vrstev) | `YES` | [src/arch.test.ts](../src/arch.test.ts) (`3 PASS`) | `KEEP` |
+
+### 6. Design ↔ Implementation mismatch & resolution
+- **Neshoda:** Žádná. Implementace v [src/domain.ts](../src/domain.ts) plně odpovídá navrženému rozhraní a kontraktu v Detailed Designu.
+- **Rozhodnutí:** Ponecháno v souladu s návrhem.
+
+### 7. Remaining design risk
+- V případě budoucího zavedení dynamických cen nebo vícedenních rezervací bude nutné rozšířit kontrakt `IConfirmationPolicy` o parametr cenové politiky (`PricingPolicy`), stávající rozhraní je však pro požadavky Křečkomatu plně postačující a uzavřené.
+
