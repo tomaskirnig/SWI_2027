@@ -68,7 +68,7 @@ Pro každou dvojici student–křeček smí součet potvrzených rezervací (`CO
 
 Služba pro odesílání oznámení.
 
-Po potvrzení nebo zrušení rezervace systém odešle uživateli oznámení.
+Po skutečném přechodu rezervace do stavu `CONFIRMED` nebo `CANCELLED` systém vytvoří požadavek na oznámení uživateli. Selhání doručení stav rezervace nevrací zpět; systém vrátí varování a oznámení později zopakuje.
 
 ## Assumption
 
@@ -76,4 +76,4 @@ Předpokládáme, že každý student má školní e-mailovou adresu, na kterou 
 
 ## Unknown
 
-Zatím nevíme, zda bude potvrzení rezervace prováděno automaticky systémem, nebo ručně správcem.
+Baseline v0.1 vyřešila původní neznámou způsobu potvrzení: student spustí Confirm a systém rezervaci potvrdí automaticky, pokud jsou splněna pravidla. Zbývající neznámou jsou provozní parametry opakování nedoručených oznámení, zejména interval a maximální počet pokusů.

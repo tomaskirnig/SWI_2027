@@ -33,3 +33,118 @@ Ponecháváme knihovnu `pg` a připojení přes pool jako základ pro rezervačn
 - Implementace: [PR #3 — Persistence](https://github.com/tomaskirnig/SWI_2027/pull/3), autor `tomaskirnig`.
 - Review: [schválení od Theromantus](https://github.com/tomaskirnig/SWI_2027/pull/3#pullrequestreview-5221734632), 16. 9. 2026 v 10:55 UTC.
 - Integrace: `MartySagin`, 16. 9. 2026 v 11:23 UTC, merge commit `979e3e2`.
+
+---
+
+## Evidence C02: specifikace → běžící aplikace
+
+**Přijatá baseline:**  
+Specification Baseline v0.1 (základní operace Create, Check Availability, Confirm, Cancel) a Baseline v0.2 (rozšíření o schvalovací proces se správcem křečka a automatickou expiraci).
+
+**Předvedené základní operace:**  
+1. `OP-01 Create Reservation` (vytvoření návrhu `DRAFT` s předběžnou kontrolou).
+2. `OP-02 Check Availability` (čtecí dotaz na dostupnost křečka bez změny stavu).
+3. `OP-03 Confirm Reservation` (přímé potvrzení nebo přechod do `PENDING_APPROVAL`).
+4. `OP-04 Cancel Reservation` (storno před začátkem z `DRAFT`, `CONFIRMED` i `PENDING_APPROVAL`).
+5. `OP-05 Approve / Reject Reservation` (schválení či zamítnutí správcem křečka).
+6. `OP-06 Expire Reservations` (automatická expirace žádostí 1h před začátkem).
+
+**Skutečně provedené automatizované ověření:**
+
+Byl vytvořen integrační ověřovací skript `src/verify.ts`,
+spouštěný příkazem:
+
+```bash
+npm run verify
+```
+
+Ověření zahrnuje:
+
+- vytváření rezervací a validaci vstupů,
+- dostupnost a překryvy intervalů,
+- denní limit student–křeček,
+- potvrzení a rušení rezervací,
+- souběžné operace Confirm / Cancel,
+- souběžná konfliktní potvrzení,
+- schvalovací proces `PENDING_APPROVAL`,
+- zamítnutí a ručně/testem spouštěnou expiraci,
+- selhání doručení Notification Service bez vrácení úspěšné změny stavu.
+
+Byly spuštěny všechny scénáře `V-01` až `V-26`, včetně doplňkových scénářů `V-15A`, `V-15B`, `V-20A` a `V-20B`.
+
+**Historie a nové ověření po opravě assertions:**
+Původní běh vykázal 30 PASS / 0 FAIL. Následnou kontrolou v auditu bylo zjištěno, že původní import `import { assert } from 'console'` nevyhazoval při nesplněné podmínce výjimku, což mohlo propustit skrytá selhání. V souboru `src/verify.ts` byl import opraven na `import assert from 'node:assert/strict'`. Správná detekce selhání byla prakticky prokázána dočasným scénářem s `assert(false)`, který spolehlivě skončil jako `[FAIL]`. Následně byly všechny scénáře spuštěny se striktními assertions.
+
+Výsledek skutečného nového běhu:
+
+```text
+PASS: 30
+FAIL: 0
+CELKEM: 30
+```
+
+Všechny definované ověřovací scénáře prošly se striktními assertions úspěšně.
+
+- Datum nového běhu: 15. 10. 2026.
+- Commit implementace: aktuální revize větve `codex/c02-basic-operations`.
+- Prostředí: dedikovaná cloudová PostgreSQL (Supabase).
+- Příkaz: `npm run verify`.
+- Výsledek: `30 PASS`, `0 FAIL`.
+- Rozsah: Integrační a doménové ověření aplikačních operací, souběhu a transakcí (nejedná se o plný HTTP E2E walking skeleton, který náleží do CP1).
+
+**Nalezené nesoulady a způsob vyřešení:**  
+- Operace Create, Confirm a Cancel používají časovou hranici
+  `currentTime <= start - 15 min`.
+- Pro schvalovací proces Baseline v0.2 byla zavedena samostatná
+  hranice: Správce křečka může rozhodnout pouze při
+  `currentTime < start - 1h`.
+- Od okamžiku `currentTime >= start - 1h` je nerozhodnutá rezervace
+  `PENDING_APPROVAL` určena k expiraci.
+- Stav `PENDING_APPROVAL` v Baseline v0.2 blokuje dostupnost křečka
+  a dočasně čerpá denní limit (dopad na Create i Confirm).
+- Stavy `REJECTED` a `EXPIRED` jsou koncové a uvolňují dostupnost
+  křečka i studentův denní limit.
+- Expirace je implementována jako funkce `expirePendingReservations()`
+  a ručně vyvolatelný REST endpoint `POST /api/reservations/expire`.
+  Automatické periodické spouštění na pozadí není v této verzi implementováno
+  a je předmětem architektonického návrhu v C03.
+
+**Ověření spolehlivosti oznámení:**  
+Pro scénáře `V-15B` a `V-20A` je doručení Notification Service
+v automatizovaném ověření ovladatelné pomocí stubu (`setNotificationSender`),
+aby bylo možné deterministicky simulovat jeho selhání.
+
+Při selhání doručení:
+- již provedený business přechod není vrácen zpět,
+- rezervace zůstává ve stavu `CONFIRMED` nebo `CANCELLED`,
+- odpověď obsahuje rozlišitelné varování,
+- příslušný záznam v `notifications_outbox` zůstává evidovaný
+  se stavem `FAILED` pro pozdější opakování (automatický background retry
+  worker je přenesen do C03).
+
+**Shrnutí dopadu změny:**  
+Zavedením schvalovacího procesu přibyl mezistav `PENDING_APPROVAL`,
+který křečka dočasně blokuje a dočasně čerpá studentův denní limit.
+Dále přibyly koncové stavy `REJECTED` a `EXPIRED`, které blokování
+i čerpání limitu uvolňují. Vznikla role `Správce křečka` (v demonstračním
+prototypu simulovaná hlavičkou `x-user-role`, nikoli produkční IdP)
+a obslužná funkce/endpoint pro expiraci.
+
+**Zbývající předpoklad / neznámá:**  
+- Provozní parametry Outbox mechanismu (interval opakování a max. počet pokusů doručení e-mailových notifikací).
+- Konkrétní externí Notification Service a její produkční integrace.
+- Způsob perzistence a konfigurace automatického plánovače (Scheduler) v produkčním prostředí (součást rozhodování C03).
+
+**Architektonické drivery přenesené do C03:**  
+1. *ACID transakce / izolace při souběhu (Concurrency driver):* Zajištění, že dva souběžné požadavky na Confirm nezpůsobí dvojí rezervaci křečka ani překročení 30min denního limitu (`REQ-07`).
+2. *Transactional Outbox Pattern (Reliability driver):* Spolehlivé doručování oznámení externí službou bez zablokování hlavní transakce.
+3. *Asynchronní schvalovací workflow a Scheduler (Async/Timer driver):* Oddělení procesu žádosti a rozhodnutí, mechanismus pro automatickou expiraci bez manuálního zásahu.
+
+### Týmové schválení baseline
+
+- **Baseline:** Specification Baseline v0.1 a Baseline v0.2
+- **Schválená verze dokumentů:** aktuální revize po zapracování připomínek C02 (větev `codex/c02-basic-operations`)
+- **Datum schválení:** 15. 10. 2026
+- **Schválili:** Martin Kalus, Tomáš Kirnig, Petr Gála, Dennis Carnevale
+- **Otevřené body:** Rozsah automatického spouštění na pozadí (cron/timer) a oddělení perzistenční vrstvy (Repository) jsou otevřeny pro řešení v navazující fázi C03.
+
