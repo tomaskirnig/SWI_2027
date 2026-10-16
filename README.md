@@ -76,6 +76,8 @@ Všechny klíčové příkazy jsou definovány v `package.json`:
 | `npm start` | **Produkční start** zkompilovaného serveru z `dist/index.js`. |
 | `npm run spike` | **Engineering Spike (C01)** — rychlé ověření spojení s PostgreSQL a zápisu/čtení testovací rezervace. |
 | `npm run verify` | **Automatizované ověření C02** — spustí všech 30 scénářů Specification Baseline proti PostgreSQL (`30 PASS / 0 FAIL`). |
+| `npm run test:unit` | **Unit testy Detailed Designu (C05)** — 10 izolovaných unit testů v paměti ověřujících kontrakt `IConfirmationPolicy`. |
+| `npm run test:arch` | **Architektonické testy (C03)** — statické ověření oddělení vrstev (L2 conformance: Controller -> Service -> Repository -> Domain). |
 
 Server standardně naslouchá na portu definovaném v `.env` (výchozí: `http://localhost:3000`).
 
