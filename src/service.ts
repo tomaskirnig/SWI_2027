@@ -11,6 +11,9 @@ import {
   countsTowardDailyLimit,
   MAX_DAILY_MINUTES,
   ONE_HOUR_MS,
+  formatPragueTime24h,
+  formatPragueDateEuropean,
+  formatPragueDateTime24h,
 } from './domain';
 import {
   repository,
@@ -186,15 +189,18 @@ export async function createReservation(
   // Předběžná kontrola kolize (BR-02)
   const conflict = await findConflictingReservation(pool, hamsterId, start, end);
   if (conflict) {
-    throw { status: 409, message: `Křeček je v požadovaném čase již rezervován (kolize s rezervací ID ${conflict.id}).` };
+    const conflictInterval = `${formatPragueTime24h(new Date(conflict.start_time))}–${formatPragueTime24h(new Date(conflict.end_time))}`;
+    throw { status: 409, message: `Křeček je v požadovaném čase již rezervován (kolize s rezervací ID ${conflict.id}, ${conflictInterval}).` };
   }
 
   // Předběžná kontrola denního limitu (BR-04)
   const limitCheck = await checkDailyLimitExceeded(pool, userId, hamsterId, start, end);
   if (limitCheck.exceeded) {
+    const [y, m, d] = (limitCheck.day || '').split('-');
+    const formattedDay = y && m && d ? `${d}.${m}.${y}` : limitCheck.day;
     throw {
       status: 400,
-      message: `Překročení denního limitu 30 minut pro den ${limitCheck.day} (již vyčerpáno: ${limitCheck.currentMinutes} min, požadováno: ${limitCheck.requestedMinutes} min).`,
+      message: `Překročení denního limitu 30 minut pro den ${formattedDay} (již vyčerpáno: ${limitCheck.currentMinutes} min, požadováno: ${limitCheck.requestedMinutes} min).`,
     };
   }
 
@@ -224,9 +230,10 @@ export async function checkAvailability(
 
   const conflict = await findConflictingReservation(pool, hamsterId, start, end);
   if (conflict) {
+    const conflictInterval = `${formatPragueTime24h(new Date(conflict.start_time))}–${formatPragueTime24h(new Date(conflict.end_time))}`;
     return {
       available: false,
-      reason: `Termín je obsazen rezervací ID ${conflict.id} (${conflict.status}).`,
+      reason: `Termín je obsazen rezervací ID ${conflict.id} (${conflictInterval}, ${conflict.status}).`,
     };
   }
 
@@ -279,15 +286,18 @@ export async function confirmReservation(
     // Transakční kontrola kolize (BR-02 / REQ-07)
     const conflict = await findConflictingReservation(client, reservation.hamster_id, start, end, reservationId);
     if (conflict) {
-      throw { status: 409, message: `Nelze potvrdit: vznikla kolize s potvrzenou rezervací ID ${conflict.id}.` };
+      const conflictInterval = `${formatPragueTime24h(new Date(conflict.start_time))}–${formatPragueTime24h(new Date(conflict.end_time))}`;
+      throw { status: 409, message: `Nelze potvrdit: vznikla kolize s potvrzenou rezervací ID ${conflict.id} (${conflictInterval}).` };
     }
 
     // Transakční kontrola denního limitu 30 minut (BR-04)
     const limitCheck = await checkDailyLimitExceeded(client, userId, reservation.hamster_id, start, end, reservationId);
     if (limitCheck.exceeded) {
+      const [y, m, d] = (limitCheck.day || '').split('-');
+      const formattedDay = y && m && d ? `${d}.${m}.${y}` : limitCheck.day;
       throw {
         status: 400,
-        message: `Potvrzením by byl překročen denní limit 30 minut pro den ${limitCheck.day}.`,
+        message: `Potvrzením by byl překročen denní limit 30 minut pro den ${formattedDay}.`,
       };
     }
 

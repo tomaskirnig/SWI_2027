@@ -60,6 +60,40 @@ export function getPragueDateString(date: Date): string {
 }
 
 /**
+ * Formátování času do evropského 24h formátu (HH:mm) v časovém pásmu Europe/Prague.
+ */
+export function formatPragueTime24h(date: Date): string {
+  const formatter = new Intl.DateTimeFormat('cs-CZ', {
+    timeZone: 'Europe/Prague',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return formatter.format(date);
+}
+
+/**
+ * Formátování data do evropského formátu (DD.MM.YYYY) v časovém pásmu Europe/Prague.
+ */
+export function formatPragueDateEuropean(date: Date): string {
+  const formatter = new Intl.DateTimeFormat('cs-CZ', {
+    timeZone: 'Europe/Prague',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  return formatter.format(date);
+}
+
+/**
+ * Formátování data a času do evropského 24h formátu (DD.MM.YYYY HH:mm) v časovém pásmu Europe/Prague.
+ */
+export function formatPragueDateTime24h(date: Date): string {
+  return `${formatPragueDateEuropean(date)} ${formatPragueTime24h(date)}`;
+}
+
+
+/**
  * BR-04: Výpočet minut v jednotlivých kalendářních dnech (Europe/Prague).
  * Rozdělí interval přes půlnoc a spočítá počet minut pro každý dotčený kalendářní den.
  */
@@ -230,10 +264,11 @@ export class ConfirmationPolicy implements IConfirmationPolicy {
     // 5. Nekoliznost termínu — žádný překryv s existujícími termíny (BR-02)
     for (const slot of existingConfirmedIntervals) {
       if (doIntervalsOverlap(candidate.start, candidate.end, slot.start, slot.end)) {
+        const slotFormatted = `${formatPragueTime24h(slot.start)}–${formatPragueTime24h(slot.end)}`;
         return {
           ok: false,
           code: 'SLOT_CONFLICT',
-          message: `Křeček ${hamster.name} je v požadovaném čase již rezervován.`,
+          message: `Křeček ${hamster.name} je v požadovaném čase již rezervován (${slotFormatted}).`,
           details: { conflictingSlot: slot }
         };
       }
@@ -244,10 +279,12 @@ export class ConfirmationPolicy implements IConfirmationPolicy {
     for (const [day, requestedMins] of requestedMinutesMap.entries()) {
       const existingMins = userDailyMinutes.get(day) || 0;
       if (existingMins + requestedMins > MAX_DAILY_MINUTES) {
+        const [y, m, d] = day.split('-');
+        const formattedDay = y && m && d ? `${d}.${m}.${y}` : day;
         return {
           ok: false,
           code: 'DAILY_LIMIT_EXCEEDED',
-          message: `Překročen denní limit 30 minut pro den ${day}. Vyčerpáno: ${existingMins} min, požadováno: ${requestedMins} min.`,
+          message: `Překročen denní limit 30 minut pro den ${formattedDay}. Vyčerpáno: ${existingMins} min, požadováno: ${requestedMins} min.`,
           details: {
             day,
             currentMinutes: existingMins,
