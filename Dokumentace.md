@@ -51,7 +51,7 @@ Kompletní technická a architektonická dokumentace univerzitního rezervační
 - **Runtime:** Node.js (TypeScript v5, spouštěno přes `tsx` ve vývoji, kompilace přes `tsc`).
 - **Webový server:** Express.js 5 s podporou simulace časového posunu (`x-current-time` hlavička).
 - **Databáze:** PostgreSQL běžící v cloudu (Supabase) s SSL šifrováním a transakční izolací.
-- **Frontend:** Responzivní jednohodinový SPA frontend bez frameworkové režie v [public/index.html](file:///C:/Users/tomki/Desktop/Ing_wannabe/SWI_2027/public/index.html).
+- **Frontend:** Responzivní jednohodinový SPA frontend bez frameworkové režie v [public/index.html](public/index.html).
 
 ---
 
@@ -65,14 +65,14 @@ Kompletní technická a architektonická dokumentace univerzitního rezervační
 1. **Definice problému a rámce (Project Frame):**
    - Vytvořen studentský antistresový program umožňující studentům krátké 15–30minutové návštěvy u školních křečků v biologickém kabinetu.
    - Stanoveno klíčové doménové pravidlo: **max. 30 minut na studenta a křečka za jeden kalendářní den** v časovém pásmu `Europe/Prague` (`BR-04`).
-2. **Technologický spike ([src/spike.ts](file:///C:/Users/tomki/Desktop/Ing_wannabe/SWI_2027/src/spike.ts)):**
+2. **Technologický spike ([src/spike.ts](src/spike.ts)):**
    - Rychlé otestování síťového spojení s PostgreSQL na cloudu přes SSL (`pg.Pool`).
    - Automatická inicializace databázových tabulek (`hamsters`, `reservations`, `notifications_outbox`).
    - Vložení výchozích křečků do katalogu (*Ferda*, *Archimedes*, *Spávek*).
 3. **End-to-end Walking Skeleton (CP1):**
    - Průchodná trasa: `POST /api/reservations` &rarr; validace vstupů &rarr; kontrola limitu &rarr; zápis do DB &rarr; návrat JSON s vygenerovaným ID rezervace ve stavu `DRAFT`.
    - Zpětné ověření přes `GET /api/reservations/:id`.
-   - Dokumentováno v [docs/intent-and-change.md](file:///C:/Users/tomki/Desktop/Ing_wannabe/SWI_2027/docs/intent-and-change.md).
+   - Dokumentováno v [docs/intent-and-change.md](docs/intent-and-change.md).
 
 ---
 
@@ -84,7 +84,7 @@ Kompletní technická a architektonická dokumentace univerzitního rezervační
 ### Detailní popis implementace
 
 #### 1. Čtyři základní operace (v0.1)
-Každá operace je formálně specifikována v [docs/reservation-specification.md](file:///C:/Users/tomki/Desktop/Ing_wannabe/SWI_2027/docs/reservation-specification.md):
+Každá operace je formálně specifikována v [docs/reservation-specification.md](docs/reservation-specification.md):
 - **OP-01 Create Reservation (`POST /api/reservations`):** Vytvoří nezávazný návrh (`DRAFT`). Provádí předběžné ověření dostupnosti a denního limitu, ale termín ještě neblokuje pro ostatní studenty.
 - **OP-02 Check Availability (`GET /api/reservations/availability`):** Čistý dotaz bez vedlejších efektů. Zjišťuje, zda je křeček aktivní a zda v daném intervalu nekoliduje s jinou potvrzenou rezervací.
 - **OP-03 Confirm Reservation (`POST /api/reservations/:id/confirm`):** Závazné potvrzení návrhu. Převádí rezervaci z `DRAFT` do `CONFIRMED`. Běží v transakci pod zámkem `SELECT ... FOR UPDATE` k eliminaci souběhu (race condition).
@@ -105,11 +105,11 @@ Každá operace je formálně specifikována v [docs/reservation-specification.m
 7. `BR-07`: Správce smí rozhodovat o žádosti pouze s předstihem větším než 1 hodina před začátkem.
 
 #### 4. Diagramy a specifikace
-- Use Case diagramy pro v0.1 i v0.2 v [DIAGRAMS.md](file:///C:/Users/tomki/Desktop/Ing_wannabe/SWI_2027/DIAGRAMS.md).
+- Use Case diagramy pro v0.1 i v0.2 v [DIAGRAMS.md](DIAGRAMS.md).
 - Stavové diagramy životního cyklu rezervace (včetně přechodů `DRAFT` &rarr; `CONFIRMED` / `PENDING_APPROVAL` &rarr; `CANCELLED`, `REJECTED`, `EXPIRED`).
 - Diagramy aktivit pro všechny operace se zvýrazněním transakčních mezí.
 
-#### 5. Automatizované ověření baseline ([src/verify.ts](file:///C:/Users/tomki/Desktop/Ing_wannabe/SWI_2027/src/verify.ts))
+#### 5. Automatizované ověření baseline ([src/verify.ts](src/verify.ts))
 - Sada 30 exaktních automatizovaných scénářů (`V-01` až `V-26`) využívající striktní `node:assert/strict`.
 - Pokrývá úspěšné cesty, hraniční stavy, souběh, překročení limitů i selhání externí notifikace (`npm run verify` &rarr; **30 PASS / 0 FAIL**).
 
@@ -123,7 +123,7 @@ Každá operace je formálně specifikována v [docs/reservation-specification.m
 ### Detailní popis implementace
 
 #### 1. Architektonické drivery
-V [docs/architecture-and-decisions.md](file:///C:/Users/tomki/Desktop/Ing_wannabe/SWI_2027/docs/architecture-and-decisions.md) byly formulovány 4 drivery podložené specifikací a evidencí:
+V [docs/architecture-and-decisions.md](docs/architecture-and-decisions.md) byly formulovány 4 drivery podložené specifikací a evidencí:
 1. **Concurrency & Exclusivity Driver (`BR-02`, `REQ-04`, `REQ-07`):** Eliminace dvojí rezervace pomocí řádkových zámků v PostgreSQL.
 2. **Delayed Approval & Expiration Driver (`REQ-10`, `REQ-13`):** Správa asynchronního schvalování a garance expirace 1h před začátkem.
 3. **Reliability & Transactional Outbox Driver (`REQ-06`, `BR-06`):** Odolnost vůči výpadkům externích systémů.
@@ -140,10 +140,10 @@ V [docs/architecture-and-decisions.md](file:///C:/Users/tomki/Desktop/Ing_wannab
 - **7 Cross-View kontrol:** Ověření souladu mezi use-case, komponentami, sekvencemi a deploymentem.
 
 #### 4. Kódové změny a oddělení vrstev
-- **Nová vrstva [src/repository.ts](file:///C:/Users/tomki/Desktop/Ing_wannabe/SWI_2027/src/repository.ts):** Definováno rozhraní `IReservationRepository` a implementace `PostgresReservationRepository`. Veškeré SQL dotazy (`SELECT ... FOR UPDATE`, `INSERT INTO reservations`, zápisy do outboxu) byly vyčleněny ze services.
-- **Očištění kontroleru [src/app.ts](file:///C:/Users/tomki/Desktop/Ing_wannabe/SWI_2027/src/app.ts):** Odstraněn přímý import databázového `pool` i raw SQL dotazy; kontroler komunikuje pouze přes rozhraní služeb a repozitáře.
-- **Automatický plánovač v [src/index.ts](file:///C:/Users/tomki/Desktop/Ing_wannabe/SWI_2027/src/index.ts):** Funkce `startExpiryScheduler()` spouští periodickou kontrolu expirací na pozadí s automatickým recovery po startu serveru (`runExpiryCheck()`).
-- **Architektonický test [src/arch.test.ts](file:///C:/Users/tomki/Desktop/Ing_wannabe/SWI_2027/src/arch.test.ts):** Statická kontrola importů a kontraktů chránící L2 architekturu (`npm run test:arch` &rarr; **3 PASS**).
+- **Nová vrstva [src/repository.ts](src/repository.ts):** Definováno rozhraní `IReservationRepository` a implementace `PostgresReservationRepository`. Veškeré SQL dotazy (`SELECT ... FOR UPDATE`, `INSERT INTO reservations`, zápisy do outboxu) byly vyčleněny ze services.
+- **Očištění kontroleru [src/app.ts](src/app.ts):** Odstraněn přímý import databázového `pool` i raw SQL dotazy; kontroler komunikuje pouze přes rozhraní služeb a repozitáře.
+- **Automatický plánovač v [src/index.ts](src/index.ts):** Funkce `startExpiryScheduler()` spouští periodickou kontrolu expirací na pozadí s automatickým recovery po startu serveru (`runExpiryCheck()`).
+- **Architektonický test [src/arch.test.ts](src/arch.test.ts):** Statická kontrola importů a kontraktů chránící L2 architekturu (`npm run test:arch` &rarr; **3 PASS**).
 
 ---
 
@@ -163,7 +163,7 @@ Vybrána komponenta s nejbohatší doménovou logikou — `Reservation Confirmat
 - `DR-05: Enforce Daily User Quota` — kontrola limitu 30 min rozpadlého přes půlnoc v `Europe/Prague` (`BR-04`).
 - `DR-06: Resolve Target State & Outcome` — rozhodnutí stavu `CONFIRMED` vs `PENDING_APPROVAL` a sestavení výsledku.
 
-#### 2. Návrh kontraktu a rozhraní ([src/domain.ts](file:///C:/Users/tomki/Desktop/Ing_wannabe/SWI_2027/src/domain.ts))
+#### 2. Návrh kontraktu a rozhraní ([src/domain.ts](src/domain.ts))
 Zavedeno čisté doménové rozhraní bez jakýchkoli I/O závislostí:
 ```typescript
 export interface IConfirmationPolicy {
@@ -188,7 +188,7 @@ Algoritmus probíhá v deterministickém pořadí:
 6. Výpočet minut po kalendářních dnech &rarr; detekce překročení 30 min.
 7. Větvení cílového stavu dle příznaku `requiresApproval`.
 
-#### 4. Izolovaný unit test suite ([src/domain.test.ts](file:///C:/Users/tomki/Desktop/Ing_wannabe/SWI_2027/src/domain.test.ts))
+#### 4. Izolovaný unit test suite ([src/domain.test.ts](src/domain.test.ts))
 10 odvozených unit testů spouštěných čistě v paměti (`npm run test:unit` &rarr; **10 PASS / 0 FAIL**, běh < 250 ms):
 - `T-DD-01`: Neplatný interval (`start >= end`) okamžitě vrátí `INVALID_INTERVAL`.
 - `T-DD-02`: Potvrzení 14 minut před začátkem vrátí `LEAD_TIME_VIOLATION`.
@@ -199,14 +199,14 @@ Algoritmus probíhá v deterministickém pořadí:
 - `T-DD-07`: Zrušenou rezervaci (`CANCELLED`) nelze potvrdit (`INVALID_STATE`).
 
 #### 5. Hloubková obhajoba testovací úrovně & evidence
-- V [docs/evidence-and-evolution.md](file:///C:/Users/tomki/Desktop/Ing_wannabe/SWI_2027/docs/evidence-and-evolution.md) podrobně zdůvodněna volba unit úrovně pro testy `T-DD-02` (časový předstih jako čistá matematika bez závislosti na OS hodinách) a `T-DD-06B` (rozpad půlnoci v pásmu `Europe/Prague` bez režie databáze).
+- V [docs/evidence-and-evolution.md](docs/evidence-and-evolution.md) podrobně zdůvodněna volba unit úrovně pro testy `T-DD-02` (časový předstih jako čistá matematika bez závislosti na OS hodinách) a `T-DD-06B` (rozpad půlnoci v pásmu `Europe/Prague` bez režie databáze).
 - Zpracována matice *Design ↔ Implementation consistency* potvrzující stoprocentní shodu kódu s návrhem.
 
 ---
 
 ## 🎨 Webové rozhraní (Frontend UX & Interaktivita)
 
-Uživatelské rozhraní v [public/index.html](file:///C:/Users/tomki/Desktop/Ing_wannabe/SWI_2027/public/index.html) nabízí dvě plně funkční perspektivy:
+Uživatelské rozhraní v [public/index.html](public/index.html) nabízí dvě plně funkční perspektivy:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐

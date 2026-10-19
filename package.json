@@ -10,7 +10,7 @@
     "verify": "tsx src/verify.ts",
     "test:unit": "tsx src/domain.test.ts",
     "test:arch": "tsx src/arch.test.ts",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "npm run test:unit && npm run test:arch",
     "spike": "tsc && node dist/spike.js"
   },
   "repository": {
