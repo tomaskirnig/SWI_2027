@@ -148,3 +148,125 @@ a obslužná funkce/endpoint pro expiraci.
 - **Schválili:** Martin Kalus, Tomáš Kirnig, Petr Gála, Dennis Carnevale
 - **Otevřené body:** Rozsah automatického spouštění na pozadí (cron/timer) a oddělení perzistenční vrstvy (Repository) jsou otevřeny pro řešení v navazující fázi C03.
 
+---
+
+## C03 — Architecture Evidence
+
+**Baseline:** v0.2  
+**Part A:** Sledován scénář `OP-03 Confirm Reservation`, zmapován v [docs/architecture-and-decisions.md](architecture-and-decisions.md) (oddíly A1–A8).
+
+**Drivers:**
+1. *Concurrency & Exclusivity (`BR-02`, `REQ-04`, `REQ-07`):* Autoritativní rozhodnutí v transakčním zámku zabraňující souběžné dvojí alokaci.
+2. *Delayed Approval Workflow & Expiration (`REQ-10`, `REQ-13`, `BR-03`):* Přesah stavu `PENDING_APPROVAL` přes request a automatická expirace v čase `start - 1h`.
+3. *Reliability & Transactional Outbox (`REQ-06`, `BR-06`):* Nezávislost commitu rezervace na dostupnosti externí notifikační služby.
+4. *Decoupling of Domain Rules from Persistence (A8):* Oddělení orchestrace a čistých doménových pravidel od raw SQL a databázového klienta.
+
+**Decision question:**  
+Kde a jak má být vlastněn delayed approval workflow a časovač expirací nerozhodnutých žádostí?
+
+**Alternatives:**
+- *Alternativa A:* In-process modul v monolitické aplikaci s neblokujícím časovačem.
+- *Alternativa B:* Samostatný runtime worker proces / plánovač.
+
+**Scenario walkthrough:**  
+Detailně popsán v oddílu E3 pro scénář potvrzení rezervace křečka vyžadujícího schválení (*Archimedes*), následovaný nečinností správce a automatickou expirací.
+
+**ADR:**  
+`ADR-01 — Umístění a vlastnictví delayed approval workflow a časovače expirací` (přijata Alternativa A s modulárním rozhraním).
+
+**Views:**
+- *domain class:* oddíl C1 (třídní diagram doménových pojmů v Mermaid bez frameworku)
+- *context:* oddíl G1 (kontextový diagram s aktéry Student, Správce křečka a Notification Service)
+- *static architecture:* oddíl G2 (diagram komponent s explicitním vlastnictvím: `Reservation Management`, `Availability`, `Approval Workflow`, `Reservation Persistence`, `Notification Integration`)
+- *state ownership:* oddíl G3 (tabulka mapování přechodů statechartu na komponenty)
+- *runtime/deployment:* oddíl G4 (mapování komponent do Node.js procesu PID 1, napojení na PostgreSQL a Notification Service)
+- *design sequence:* oddíl H1 (návrhový sekvenční diagram pro Confirm Reservation s větví `alt` pro kolizi a větvením pro approval)
+- *focused design class:* oddíl H2 (návrhový třídní diagram s `IReservationRepository`, `PostgresReservationRepository`, `ReservationService`, `ApprovalService`)
+
+**Cross-view issues found/resolved:**  
+Vyhodnoceno 7 vazeb v oddílu I; všechny vazby C02↔G2, C2↔G2, G2↔H1, H1↔H2, statechart↔G3/H1, G2↔G4 a ADR↔G2/G4 jsou vzájemně plně konzistentní.
+
+**AS-IS → TO-BE delta:**  
+Zpracována v oddílu J; identifikovány akce `CHANGE` pro vyčlenění perzistenční vrstvy (Repository), zprovoznění in-process časovače expirací a zavedení automatického architektonického testu.
+
+**Implementation changes:**
+1. Vytvořen soubor `src/repository.ts` s rozhraním `IReservationRepository` a třídou `PostgresReservationRepository`, kam byly vyčleněny raw SQL dotazy a transakční metody.
+2. Refaktorován soubor `src/service.ts`, který deleguje databázové operace na repozitář a soustředí se na orchestraci a doménová pravidla.
+3. Upraven soubor `src/app.ts`, ze kterého byl odstraněn přímý import `pool` i raw SQL dotazy (volá výhradně service a repository rozhraní).
+4. V `src/index.ts` byl zprovozněn in-process neblokující plánovač expirací `startExpiryScheduler()` s recovery při startu serveru (`runExpiryCheck()`).
+5. Vytvořen soubor `src/arch.test.ts` a přidán npm skript `test:arch`.
+
+**Behaviour verification:**
+- Příkaz: `npm run verify`
+- Výsledek: `30 PASS`, `0 FAIL` (všech 30 integračních a doménových scénářů V-01 až V-26 prošlo úspěšně se striktními assertions).
+
+**Architecture conformance rule + result:**
+- *Architektonické pravidlo:* Žádný kontroler (`src/app.ts`) ani doménová logika (`src/domain.ts`) nesmí přímo importovat databázový ovladač `pg` ani db pool; perzistence je izolována v `src/repository.ts`. Doména `src/domain.ts` obsahuje pouze čisté funkce bez infrastruktury.
+- *Kontrola:* `npm run test:arch` (automatický skript `src/arch.test.ts`)
+- *Výsledek:* `ARCH-01 PASS`, `ARCH-02 PASS`, `ARCH-03 PASS`.
+
+**Remaining uncertainty / risk:**  
+V případě budoucího horizontálního škálování Node.js aplikace na více instancí bude nutné in-process timer doplnit o distribuovaný zámek (např. `pg_advisory_lock`) nebo vyčlenit do samostatného cron workeru (Alternativa B z ADR-01).
+
+**Commit / tag:**  
+Pracovní větev `C03`, připraveno pro odevzdání cvičení C03.
+
+---
+
+## C05 DD Verification Evidence
+
+### 1. Selected architecture unit / responsibility
+- **Unit:** `Reservation Confirmation & Availability Policy` (v rámci `Reservation Management` a [src/domain.ts](../src/domain.ts)).
+- **Scope:** Přísné deterministické vyhodnocení podmínek pro přechod rezervace z `DRAFT` do `CONFIRMED` / `PENDING_APPROVAL` (`BR-01` až `BR-05`).
+
+### 2. Tests derived from DD
+Odvozeno celkem 10 unit testů pokrývajících kontrakt rozhraní, větvení algoritmu, přechody stavů, doménové invarianty i chování při chybě:
+
+| ID testu | DD element / rozhodnutí | Co musí platit? | Test level | Testovací případ |
+|---|---|---|---|---|
+| **T-DD-01** | Interface Contract (`BR-01`) | Neplatný interval (`start >= end`) je okamžitě odmítnut bez DB. | Unit | `INVALID_INTERVAL` při obrácených časech. |
+| **T-DD-02** | Algorithm Branch (`BR-03`) | Časový předstih < 15 minut před začátkem je odmítnut. | Unit | `LEAD_TIME_VIOLATION` při potvrzení 14 min před začátkem. |
+| **T-DD-03** | Failure Behavior | Neaktivní křeček nesmí být potvrzen. | Unit | `HAMSTER_INACTIVE` pro křečka Spávka (`isActive = false`). |
+| **T-DD-04A** | State Transition (`BR-05`) | Běžný křeček přejde přímo do stavu `CONFIRMED`. | Unit | `ferda` bez nutnosti schválení &rarr; `CONFIRMED`. |
+| **T-DD-04B** | State Transition (`BR-05`) | Křeček s dohledem přejde do stavu `PENDING_APPROVAL`. | Unit | `archimedes` vyžadující dohled &rarr; `PENDING_APPROVAL`. |
+| **T-DD-05A** | Collision Detection (`BR-02`) | Překryv s existujícím slotem vrátí kolizi. | Unit | `SLOT_CONFLICT` při intervalech 14:00–14:30 a 14:15–14:45. |
+| **T-DD-05B** | Collision Detection (`BR-01`) | Dotyk hranic intervalů (14:30) není kolize. | Unit | Úspěšné potvrzení navazujícího slotu 14:30–15:00. |
+| **T-DD-06A** | Daily Limit (`BR-04`) | Překročení součtu 30 minut v kalendářním dni je odmítnuto. | Unit | `DAILY_LIMIT_EXCEEDED` při 20 min existujících + 15 min nových. |
+| **T-DD-06B** | Daily Limit Calculation | Rezervace přes půlnoc rozpočte minuty do obou kalendářních dnů. | Unit | 23:50–00:10 v `Europe/Prague` &rarr; 10 min den 1, 10 min den 2. |
+| **T-DD-07** | State Machine Invariant | Rezervaci ve stavu `CANCELLED` již nelze znovu potvrdit. | Unit | `INVALID_STATE` při pokusu potvrdit zrušený termín. |
+
+### 3. Justification of Test Levels (podrobné odůvodnění min. 2 testů)
+
+#### Test T-DD-02 (Předstih 15 minut – Algorithm branch):
+- **Selected level:** `Unit test`
+- **Why this level:** Pravidlo předstihu je čistá časová matematika závislá pouze na dvou instancích času (`currentTime` a `start`). Testování na unit úrovni umožňuje deterministicky předat libovolný virtuální čas `now` bez nutnosti běžící databáze nebo HTTP serveru a bez závislosti na systémových hodinách OS.
+- **What design decision does this test verify?** Ověřuje návrhové rozhodnutí, že `ConfirmationPolicy` přijímá referenční čas `currentTime` jako explicitní parametr kontraktu a vynucuje striktní nerovnost `currentTime <= start - 15 min` (`BR-03`).
+
+#### Test T-DD-06B (Výpočet čerpání limitu přes půlnoc – Domain Calculation):
+- **Selected level:** `Unit test`
+- **Why this level:** Výpočet minut v jednotlivých dnech pásma `Europe/Prague` závisí na přesném rozpadu časových zón (letní/zimní čas a přechod půlnoci). Izolovaný unit test přímo ověřuje návratovou mapu minut pro dotčené dny bez režie síťového I/O.
+- **What design decision does this test verify?** Ověřuje návrhové rozhodnutí `DR-05`, že denní limit se nepočítá jako plovoucí 24hodinové okno, nýbrž striktně po kalendářních dnech v pražské časové zóně (`BR-04`).
+
+### 4. Unit / Component tests executed
+- **Příkaz:** `npm run test:unit` (`tsx src/domain.test.ts`)
+- **Výsledek:** `10 PASS`, `0 FAIL` (100% úspěšnost).
+- **Rychlost běhu:** < 250 ms (čistý in-memory běh bez I/O).
+
+### 5. Design ↔ Implementation consistency matrix
+| DD element / decision | Implemented? | Evidence | Action |
+|---|:---:|---|---|
+| Rozhraní `IConfirmationPolicy` a třída `ConfirmationPolicy` | `YES` | [src/domain.ts](../src/domain.ts) | `KEEP` |
+| Vstupní kandidát `ConfirmationCandidate` a `HamsterProfile` | `YES` | [src/domain.ts](../src/domain.ts) | `KEEP` |
+| Výsledkový kontrakt `ConfirmationResult` a chybové kódy | `YES` | [src/domain.ts](../src/domain.ts) | `KEEP` |
+| Izolované unit testy odvozené z DD (T-DD-01 až T-DD-07) | `YES` | [src/domain.test.ts](../src/domain.test.ts) | `KEEP` |
+| NPM skript `test:unit` pro automatické spouštění | `YES` | [package.json](../package.json) | `KEEP` |
+| Zpětná kompatibilita s C02 integračními testy (30 scénářů) | `YES` | [src/verify.ts](../src/verify.ts) (`30 PASS / 0 FAIL`) | `KEEP` |
+| Architektonická pravidla L2 (izolace vrstev) | `YES` | [src/arch.test.ts](../src/arch.test.ts) (`3 PASS`) | `KEEP` |
+
+### 6. Design ↔ Implementation mismatch & resolution
+- **Neshoda:** Žádná. Implementace v [src/domain.ts](../src/domain.ts) plně odpovídá navrženému rozhraní a kontraktu v Detailed Designu.
+- **Rozhodnutí:** Ponecháno v souladu s návrhem.
+
+### 7. Remaining design risk
+- V případě budoucího zavedení dynamických cen nebo vícedenních rezervací bude nutné rozšířit kontrakt `IConfirmationPolicy` o parametr cenové politiky (`PricingPolicy`), stávající rozhraní je však pro požadavky Křečkomatu plně postačující a uzavřené.
+

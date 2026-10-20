@@ -104,6 +104,13 @@
       gap: 12px;
       text-decoration: none;
       color: inherit;
+      cursor: pointer;
+      transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+
+    .brand:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
     }
 
     .brand-icon {
@@ -116,6 +123,12 @@
       align-items: center;
       justify-content: center;
       border: 1px solid rgba(217, 107, 39, 0.15);
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+    }
+
+    .brand:hover .brand-icon {
+      transform: scale(1.08) rotate(-4deg);
+      box-shadow: 0 4px 10px rgba(217, 107, 39, 0.18);
     }
 
     .brand-title {
@@ -158,6 +171,14 @@
       border-radius: var(--radius-sm);
       font-size: 13px;
       color: var(--text-secondary);
+      cursor: pointer;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+    }
+
+    .user-pill:hover {
+      border-color: var(--border-strong);
+      background: var(--bg-card-subtle);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
     }
 
     .user-pill select {
@@ -194,10 +215,16 @@
       align-items: center;
       gap: 6px;
       transition: all 0.15s ease;
+      user-select: none;
     }
 
     .mode-btn:hover {
       color: var(--text-main);
+      background: rgba(0, 0, 0, 0.04);
+    }
+
+    .mode-btn:active {
+      transform: scale(0.97);
     }
 
     .mode-btn.active {
@@ -306,19 +333,39 @@
       flex-direction: column;
       justify-content: space-between;
       box-shadow: var(--shadow-subtle);
-      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+      transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.18s ease, background-color 0.18s ease;
       position: relative;
+      cursor: pointer;
+      user-select: none;
     }
 
     .hamster-card:hover {
-      transform: translateY(-2px);
-      box-shadow: var(--shadow-hover);
-      border-color: var(--border-strong);
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(35, 39, 42, 0.08), 0 2px 6px rgba(35, 39, 42, 0.04);
+      border-color: var(--terracotta);
+    }
+
+    .hamster-card:focus-visible {
+      outline: 2px solid var(--terracotta);
+      outline-offset: 3px;
+    }
+
+    .hamster-card.selected {
+      border-color: var(--terracotta);
+      background-color: #FFFDFB;
+      box-shadow: 0 0 0 2px rgba(217, 107, 39, 0.25), 0 8px 20px rgba(217, 107, 39, 0.08);
     }
 
     .hamster-card.inactive {
-      opacity: 0.72;
+      opacity: 0.65;
       background: var(--bg-card-subtle);
+      cursor: not-allowed;
+    }
+
+    .hamster-card.inactive:hover {
+      transform: none;
+      box-shadow: var(--shadow-subtle);
+      border-color: var(--border-subtle);
     }
 
     .hamster-top {
@@ -453,14 +500,25 @@
       border-radius: var(--radius-sm);
       border: 1px solid transparent;
       cursor: pointer;
-      transition: all 0.15s ease;
+      transition: transform 0.12s ease, box-shadow 0.15s ease, background-color 0.15s ease, border-color 0.15s ease, filter 0.12s ease;
       text-decoration: none;
       white-space: nowrap;
+      user-select: none;
+    }
+
+    .btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+    }
+
+    .btn:active:not(:disabled) {
+      transform: translateY(0);
+      filter: brightness(0.95);
     }
 
     .btn:disabled {
       opacity: 0.5;
       cursor: not-allowed;
+      transform: none !important;
     }
 
     .btn-primary {
@@ -471,6 +529,7 @@
 
     .btn-primary:hover:not(:disabled) {
       background: var(--terracotta-hover);
+      box-shadow: 0 4px 14px rgba(217, 107, 39, 0.35);
     }
 
     .btn-outline {
@@ -482,6 +541,7 @@
     .btn-outline:hover:not(:disabled) {
       background: var(--bg-card-subtle);
       border-color: var(--text-secondary);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
     }
 
     .btn-subtle {
@@ -497,10 +557,12 @@
     .btn-sage {
       background: var(--sage);
       color: #FFFFFF;
+      box-shadow: 0 1px 4px rgba(51, 115, 87, 0.25);
     }
 
     .btn-sage:hover:not(:disabled) {
       background: #285A43;
+      box-shadow: 0 4px 14px rgba(51, 115, 87, 0.35);
     }
 
     .btn-sm {
@@ -513,8 +575,9 @@
       background: transparent;
     }
 
-    .btn-danger-subtle:hover {
+    .btn-danger-subtle:hover:not(:disabled) {
       background: var(--rose-soft);
+      color: #991B1B;
     }
 
     /* Quick Reservation Panel (Booking Drawer) */
@@ -525,6 +588,7 @@
       padding: 32px;
       box-shadow: var(--shadow-subtle);
       margin-bottom: 48px;
+      scroll-margin-top: 56px;
     }
 
     .booking-header {
@@ -573,6 +637,11 @@
       color: var(--text-main);
       outline: none;
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      cursor: pointer;
+    }
+
+    .form-input:hover, .form-select:hover {
+      border-color: var(--text-secondary);
     }
 
     .form-input:focus, .form-select:focus {
@@ -602,18 +671,27 @@
       font-weight: 600;
       color: var(--text-secondary);
       cursor: pointer;
-      transition: all 0.12s ease;
+      transition: transform 0.12s ease, background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
+      user-select: none;
     }
 
     .chip:hover {
       border-color: var(--border-strong);
       color: var(--text-main);
+      transform: translateY(-1px);
+      background: #FAF5EE;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04);
+    }
+
+    .chip:active {
+      transform: translateY(0);
     }
 
     .chip.active {
       background: var(--terracotta-soft);
       border-color: rgba(217, 107, 39, 0.4);
       color: var(--terracotta);
+      box-shadow: 0 1px 4px rgba(217, 107, 39, 0.15);
     }
 
     /* Live Availability & Limit Indicator */
@@ -759,20 +837,23 @@
       flex-direction: column;
       gap: 8px;
       height: 220px;
-      transition: all 0.15s ease;
+      transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
       cursor: pointer;
       position: relative;
+      user-select: none;
     }
 
     .day-column:hover {
-      border-color: var(--border-strong);
-      background: #F4EFE7;
+      transform: translateY(-2px);
+      border-color: var(--terracotta);
+      background: #F5EFE7;
+      box-shadow: 0 4px 14px rgba(35, 39, 42, 0.08);
     }
 
     .day-column.active-day {
       border-color: var(--terracotta);
       background: var(--bg-card-accent);
-      box-shadow: 0 0 0 1px var(--terracotta);
+      box-shadow: 0 0 0 1.5px var(--terracotta), 0 2px 8px rgba(217, 107, 39, 0.12);
     }
 
     .day-column.is-today {
@@ -958,7 +1039,7 @@
     }
 
     .tab-link {
-      padding: 8px 14px;
+      padding: 8px 16px;
       border-bottom: 2px solid transparent;
       font-size: 13.5px;
       font-weight: 600;
@@ -969,16 +1050,20 @@
       border-right: none;
       cursor: pointer;
       margin-bottom: -1px;
-      transition: all 0.15s ease;
+      transition: color 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+      border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+      user-select: none;
     }
 
     .tab-link:hover {
       color: var(--text-main);
+      background: rgba(0, 0, 0, 0.03);
     }
 
     .tab-link.active {
       color: var(--terracotta);
       border-bottom-color: var(--terracotta);
+      background: transparent;
     }
 
     /* Reservation Cards */
@@ -999,11 +1084,13 @@
       flex-wrap: wrap;
       gap: 16px;
       box-shadow: var(--shadow-subtle);
-      transition: border-color 0.15s ease;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
     }
 
     .res-card:hover {
+      transform: translateY(-1px);
       border-color: var(--border-strong);
+      box-shadow: var(--shadow-hover);
     }
 
     .res-card-left {
@@ -1261,10 +1348,13 @@
     .footer-links a {
       color: var(--text-secondary);
       text-decoration: none;
+      cursor: pointer;
+      transition: color 0.15s ease;
     }
 
     .footer-links a:hover {
       color: var(--terracotta);
+      text-decoration: underline;
     }
 
     /* Responsive */
@@ -1421,8 +1511,37 @@
 
               <!-- Time Picker & Chips -->
               <div class="form-group">
-                <label class="form-label" for="bookTime">Čas začátku</label>
-                <input type="time" id="bookTime" class="form-input" required value="14:00" onchange="onFormParamChange()">
+                <label class="form-label">Čas začátku (24h formát)</label>
+                <div class="time-two-selects" style="display: flex; gap: 8px; align-items: center;">
+                  <div style="flex: 1;">
+                    <select id="bookHour" class="form-select" onchange="onTimeSelectChange()">
+                      <option value="07">07 hod.</option>
+                      <option value="08">08 hod.</option>
+                      <option value="09">09 hod.</option>
+                      <option value="10">10 hod.</option>
+                      <option value="11">11 hod.</option>
+                      <option value="12">12 hod.</option>
+                      <option value="13">13 hod.</option>
+                      <option value="14" selected>14 hod.</option>
+                      <option value="15">15 hod.</option>
+                      <option value="16">16 hod.</option>
+                      <option value="17">17 hod.</option>
+                      <option value="18">18 hod.</option>
+                      <option value="19">19 hod.</option>
+                      <option value="20">20 hod.</option>
+                    </select>
+                  </div>
+                  <span style="font-weight: 700; color: var(--text-muted); font-size: 16px;">:</span>
+                  <div style="flex: 1;">
+                    <select id="bookMinute" class="form-select" onchange="onTimeSelectChange()">
+                      <option value="00" selected>00 min.</option>
+                      <option value="15">15 min.</option>
+                      <option value="30">30 min.</option>
+                      <option value="45">45 min.</option>
+                    </select>
+                  </div>
+                </div>
+                <input type="hidden" id="bookTime" value="14:00">
                 <div class="chip-group">
                   <span class="chip" onclick="setQuickTime('10:00', this)">10:00</span>
                   <span class="chip" onclick="setQuickTime('12:00', this)">12:00</span>
@@ -1713,6 +1832,25 @@
       
       document.getElementById('bookDate').value = `${yyyy}-${mm}-${dd}`;
       document.getElementById('bookDate').min = new Date().toISOString().split('T')[0];
+
+      // Reset výchozího času na 14:00
+      if (document.getElementById('bookHour')) document.getElementById('bookHour').value = '14';
+      if (document.getElementById('bookMinute')) document.getElementById('bookMinute').value = '00';
+      if (document.getElementById('bookTime')) document.getElementById('bookTime').value = '14:00';
+    }
+
+    function onTimeSelectChange() {
+      const h = document.getElementById('bookHour')?.value || '14';
+      const m = document.getElementById('bookMinute')?.value || '00';
+      const hiddenInput = document.getElementById('bookTime');
+      if (hiddenInput) {
+        hiddenInput.value = `${h}:${m}`;
+      }
+      // Odznačit rychlé čipy, pokud neodpovídají
+      document.querySelectorAll('#reservationForm .chip-group:nth-of-type(2) .chip').forEach(c => {
+        c.classList.toggle('active', c.textContent.trim() === `${h}:${m}`);
+      });
+      onFormParamChange();
     }
 
     // Role / Mode Switcher
@@ -1771,6 +1909,7 @@
 
         const isSelected = h.id === selectedHamsterId;
         const activeClass = h.is_active ? '' : 'inactive';
+        const selectedClass = isSelected ? 'selected' : '';
 
         const statusBadge = h.is_active 
           ? '<span class="badge badge-sage">Aktivní v kabinetu</span>'
@@ -1780,12 +1919,22 @@
           ? '<span class="badge badge-lavender">Vyžaduje dohled správce</span>'
           : '<span class="badge badge-terracotta">Přímé potvrzení</span>';
 
+        const selectedBadge = isSelected
+          ? '<span class="badge badge-terracotta" style="font-weight:700;">✓ Zvolen</span>'
+          : '';
+
         const bookBtn = h.is_active
-          ? `<button class="btn btn-sm btn-primary" onclick="quickSelectHamster('${h.id}')">Vybrat pro rezervaci</button>`
-          : `<button class="btn btn-sm btn-outline" disabled>Spí (nedostupný)</button>`;
+          ? `<button type="button" class="btn btn-sm ${isSelected ? 'btn-sage' : 'btn-primary'}" onclick="event.stopPropagation(); quickSelectHamster('${h.id}')">
+              ${isSelected ? '✓ Vybrán' : 'Vybrat pro rezervaci'}
+             </button>`
+          : `<button type="button" class="btn btn-sm btn-outline" disabled onclick="event.stopPropagation()">Spí (nedostupný)</button>`;
+
+        const clickAttr = h.is_active
+          ? `onclick="quickSelectHamster('${h.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();quickSelectHamster('${h.id}');}" title="Klikněte pro výběr křečka ${h.name}"`
+          : `onclick="showToast('info', 'Křeček ${h.name} momentálně spí a odpočívá v zázemí.')" title="Křeček není momentálně aktivní"`;
 
         return `
-          <div class="hamster-card ${activeClass}" style="${isSelected ? 'border-color: var(--terracotta); box-shadow: var(--shadow-hover);' : ''}">
+          <div class="hamster-card ${activeClass} ${selectedClass}" ${clickAttr}>
             <div>
               <div class="hamster-top">
                 <div class="hamster-avatar-box">${meta.avatar}</div>
@@ -1795,6 +1944,7 @@
                   <div class="hamster-tags">
                     ${statusBadge}
                     ${approvalBadge}
+                    ${selectedBadge}
                   </div>
                 </div>
               </div>
@@ -1830,7 +1980,9 @@
       if (sel) sel.value = id;
       
       const section = document.getElementById('bookingSection');
-      section.scrollIntoView({ behavior: 'smooth' });
+      if (section) {
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
       
       updateAvailabilityAndMeter();
       renderCalendarSchedule();
@@ -1869,7 +2021,17 @@
       parent.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
       chipElem.classList.add('active');
 
-      document.getElementById('bookTime').value = timeStr;
+      const [h, m] = timeStr.split(':');
+      const hourSelect = document.getElementById('bookHour');
+      const minuteSelect = document.getElementById('bookMinute');
+
+      if (hourSelect) hourSelect.value = h;
+      if (minuteSelect) minuteSelect.value = m;
+
+      const timeInput = document.getElementById('bookTime');
+      if (timeInput) {
+        timeInput.value = timeStr;
+      }
       updateAvailabilityAndMeter();
     }
 
@@ -2328,7 +2490,7 @@
                 <span style="font-size: 18px;">🐹</span>
                 <div>
                   <div style="font-size: 13.5px; font-weight: 600;">#${r.id} &bull; ${getHamsterName(r.hamster_id)} (${r.user_id})</div>
-                  <div style="font-size: 12px; color: var(--text-muted);">📅 ${timeFmt} &bull; Vytvořeno: ${formatTime(new Date(r.created_at))}</div>
+                  <div style="font-size: 12px; color: var(--text-muted);">📅 ${timeFmt} &bull; Vytvořeno: ${formatDateTime(new Date(r.created_at))}</div>
                 </div>
               </div>
               <div>
@@ -2349,16 +2511,45 @@
       return h ? h.name : id;
     }
 
-    function formatDatePretty(isoString) {
-      if (!isoString) return '';
-      const d = new Date(isoString);
-      const days = ['Neděle', 'Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek', 'Sobota'];
-      const dayName = days[d.getDay()];
-      return `${dayName} ${d.getDate()}. ${d.getMonth() + 1}.`;
+    // Striktní evropský 24h formát HH:mm (odolný vůči en-US systémovému locale prohlížeče)
+    function formatTime(dateObj) {
+      if (!dateObj) return '';
+      const d = (dateObj instanceof Date) ? dateObj : new Date(dateObj);
+      if (isNaN(d.getTime())) return '';
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      return `${hours}:${minutes}`;
     }
 
-    function formatTime(dateObj) {
-      return dateObj.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+    // Striktní evropský formát data DD.MM.YYYY
+    function formatDateEuropean(dateObj) {
+      if (!dateObj) return '';
+      const d = (dateObj instanceof Date) ? dateObj : new Date(dateObj);
+      if (isNaN(d.getTime())) return '';
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      return `${dd}.${mm}.${yyyy}`;
+    }
+
+    // Striktní evropský formát data a času DD.MM.YYYY HH:mm
+    function formatDateTime(dateObj) {
+      if (!dateObj) return '';
+      const d = (dateObj instanceof Date) ? dateObj : new Date(dateObj);
+      if (isNaN(d.getTime())) return '';
+      return `${formatDateEuropean(d)} ${formatTime(d)}`;
+    }
+
+    function formatDatePretty(isoString) {
+      if (!isoString) return '';
+      const d = (isoString instanceof Date) ? isoString : new Date(isoString);
+      if (isNaN(d.getTime())) return '';
+      const days = ['Neděle', 'Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek', 'Sobota'];
+      const dayName = days[d.getDay()];
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      return `${dayName} ${dd}.${mm}.${yyyy}`;
     }
 
     // Toast Alert Notification
@@ -2481,7 +2672,7 @@
                 <span class="day-name">${dayNames[i]}</span>
                 ${countBadge}
               </div>
-              <div class="day-number">${dateObj.getDate()}. ${dateObj.getMonth() + 1}.</div>
+              <div class="day-number">${String(dateObj.getDate()).padStart(2, '0')}.${String(dateObj.getMonth() + 1).padStart(2, '0')}.</div>
               ${isToday ? '<span class="day-today-tag">Dnes</span>' : ''}
             </div>
             <div class="day-events-list">

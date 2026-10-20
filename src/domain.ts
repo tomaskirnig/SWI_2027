@@ -60,6 +60,40 @@ export function getPragueDateString(date: Date): string {
 }
 
 /**
+ * Formátování času do evropského 24h formátu (HH:mm) v časovém pásmu Europe/Prague.
+ */
+export function formatPragueTime24h(date: Date): string {
+  const formatter = new Intl.DateTimeFormat('cs-CZ', {
+    timeZone: 'Europe/Prague',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return formatter.format(date);
+}
+
+/**
+ * Formátování data do evropského formátu (DD.MM.YYYY) v časovém pásmu Europe/Prague.
+ */
+export function formatPragueDateEuropean(date: Date): string {
+  const formatter = new Intl.DateTimeFormat('cs-CZ', {
+    timeZone: 'Europe/Prague',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  return formatter.format(date);
+}
+
+/**
+ * Formátování data a času do evropského 24h formátu (DD.MM.YYYY HH:mm) v časovém pásmu Europe/Prague.
+ */
+export function formatPragueDateTime24h(date: Date): string {
+  return `${formatPragueDateEuropean(date)} ${formatPragueTime24h(date)}`;
+}
+
+
+/**
  * BR-04: Výpočet minut v jednotlivých kalendářních dnech (Europe/Prague).
  * Rozdělí interval přes půlnoc a spočítá počet minut pro každý dotčený kalendářní den.
  */
@@ -107,3 +141,172 @@ export function blocksHamsterAvailability(status: ReservationStatus): boolean {
 export function countsTowardDailyLimit(status: ReservationStatus): boolean {
   return status === 'CONFIRMED' || status === 'PENDING_APPROVAL';
 }
+
+/* ========================================================================= */
+/* C05 Detailed Design — Reservation Confirmation & Availability Policy      */
+/* ========================================================================= */
+
+export interface ConfirmationCandidate {
+  id?: number;
+  userId: string;
+  hamsterId: string;
+  start: Date;
+  end: Date;
+  status: ReservationStatus;
+}
+
+export interface HamsterProfile {
+  id: string;
+  name: string;
+  isActive: boolean;
+  requiresApproval: boolean;
+}
+
+export type ConfirmationErrorCode = 
+  | 'INVALID_INTERVAL'
+  | 'LEAD_TIME_VIOLATION'
+  | 'HAMSTER_INACTIVE'
+  | 'INVALID_STATE'
+  | 'SLOT_CONFLICT'
+  | 'DAILY_LIMIT_EXCEEDED';
+
+export interface ConfirmationSuccess {
+  ok: true;
+  targetStatus: 'CONFIRMED' | 'PENDING_APPROVAL';
+  message: string;
+}
+
+export interface ConfirmationFailure {
+  ok: false;
+  code: ConfirmationErrorCode;
+  message: string;
+  details?: {
+    day?: string;
+    currentMinutes?: number;
+    requestedMinutes?: number;
+    conflictingSlot?: TimeInterval;
+  };
+}
+
+export type ConfirmationResult = ConfirmationSuccess | ConfirmationFailure;
+
+/**
+ * Klíčové rozhraní kontraktu pro vyhodnocení přechodu rezervace z DRAFT do cílového stavu (C05 DD Krok 3).
+ */
+export interface IConfirmationPolicy {
+  /**
+   * Vyhodnotí všechny doménové invarianty a rozhodne cílový stav rezervace.
+   *
+   * @param candidate Navrhovaná rezervace k potvrzení
+   * @param hamster Profil křečka (aktivita, nutnost schválení)
+   * @param existingConfirmedIntervals Již blokované intervaly křečka
+   * @param userDailyMinutes Již vyčerpané minuty studenta po kalendářních dnech (Europe/Prague)
+   * @param currentTime Aktuální čas ověření
+   * @returns ConfirmationResult (úspěch s cílovým stavem nebo selhání s kódem chyby)
+   */
+  evaluate(
+    candidate: ConfirmationCandidate,
+    hamster: HamsterProfile,
+    existingConfirmedIntervals: TimeInterval[],
+    userDailyMinutes: Map<string, number>,
+    currentTime: Date
+  ): ConfirmationResult;
+}
+
+/**
+ * Konkrétní implementace Confirmation Policy (C05 DD Krok 3 & 4).
+ * Čistá doménová logika bez I/O závislostí a bez vedlejších efektů.
+ */
+export class ConfirmationPolicy implements IConfirmationPolicy {
+  evaluate(
+    candidate: ConfirmationCandidate,
+    hamster: HamsterProfile,
+    existingConfirmedIntervals: TimeInterval[],
+    userDailyMinutes: Map<string, number>,
+    currentTime: Date
+  ): ConfirmationResult {
+    // 1. Validace časového intervalu (BR-01)
+    if (!isIntervalValid(candidate.start, candidate.end)) {
+      return {
+        ok: false,
+        code: 'INVALID_INTERVAL',
+        message: 'Časový interval rezervace je neplatný (konec musí být po začátku).'
+      };
+    }
+
+    // 2. Časový předstih min. 15 minut (BR-01 & BR-03)
+    if (!isAtLeast15MinBefore(currentTime, candidate.start)) {
+      return {
+        ok: false,
+        code: 'LEAD_TIME_VIOLATION',
+        message: 'Rezervaci lze potvrdit nejpozději 15 minut před jejím začátkem.'
+      };
+    }
+
+    // 3. Aktivita křečka
+    if (!hamster.isActive) {
+      return {
+        ok: false,
+        code: 'HAMSTER_INACTIVE',
+        message: `Křeček ${hamster.name} momentálně není aktivní pro rezervace.`
+      };
+    }
+
+    // 4. Výchozí stav musí být DRAFT
+    if (candidate.status !== 'DRAFT') {
+      return {
+        ok: false,
+        code: 'INVALID_STATE',
+        message: `Rezervaci ve stavu ${candidate.status} již nelze znovu potvrdit.`
+      };
+    }
+
+    // 5. Nekoliznost termínu — žádný překryv s existujícími termíny (BR-02)
+    for (const slot of existingConfirmedIntervals) {
+      if (doIntervalsOverlap(candidate.start, candidate.end, slot.start, slot.end)) {
+        const slotFormatted = `${formatPragueTime24h(slot.start)}–${formatPragueTime24h(slot.end)}`;
+        return {
+          ok: false,
+          code: 'SLOT_CONFLICT',
+          message: `Křeček ${hamster.name} je v požadovaném čase již rezervován (${slotFormatted}).`,
+          details: { conflictingSlot: slot }
+        };
+      }
+    }
+
+    // 6. Denní limit studenta max. 30 minut (BR-04)
+    const requestedMinutesMap = calculateMinutesPerDay(candidate.start, candidate.end);
+    for (const [day, requestedMins] of requestedMinutesMap.entries()) {
+      const existingMins = userDailyMinutes.get(day) || 0;
+      if (existingMins + requestedMins > MAX_DAILY_MINUTES) {
+        const [y, m, d] = day.split('-');
+        const formattedDay = y && m && d ? `${d}.${m}.${y}` : day;
+        return {
+          ok: false,
+          code: 'DAILY_LIMIT_EXCEEDED',
+          message: `Překročen denní limit 30 minut pro den ${formattedDay}. Vyčerpáno: ${existingMins} min, požadováno: ${requestedMins} min.`,
+          details: {
+            day,
+            currentMinutes: existingMins,
+            requestedMinutes: requestedMins
+          }
+        };
+      }
+    }
+
+    // 7. Rozhodnutí cílového stavu (BR-05)
+    const targetStatus = hamster.requiresApproval ? 'PENDING_APPROVAL' : 'CONFIRMED';
+    const message = hamster.requiresApproval
+      ? `Rezervace vyžaduje schválení správcem kabinetu (stav PENDING_APPROVAL).`
+      : `Rezervace byla úspěšně závazně potvrzena (stav CONFIRMED).`;
+
+    return {
+      ok: true,
+      targetStatus,
+      message
+    };
+  }
+}
+
+export const confirmationPolicy = new ConfirmationPolicy();
+
