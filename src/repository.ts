@@ -1,4 +1,4 @@
-import { PoolClient, QueryResult } from 'pg';
+import { PoolClient } from 'pg';
 import { pool } from './db';
 import { ReservationStatus } from './domain';
 
@@ -31,17 +31,18 @@ export interface OutboxRow {
 export type DbExecutor = PoolClient | typeof pool;
 
 export interface IReservationRepository {
-  findHamsterById(executor: DbExecutor, id: string): Promise<HamsterRow | null>;
+  initializeDatabase(): Promise<void>;
+  findHamsterById(executor: DbExecutor | undefined, id: string): Promise<HamsterRow | null>;
   findHamsterByIdForUpdate(client: PoolClient, id: string): Promise<HamsterRow | null>;
-  findReservationById(executor: DbExecutor, id: number): Promise<ReservationRow | null>;
+  findReservationById(executor: DbExecutor | undefined, id: number): Promise<ReservationRow | null>;
   findReservationByIdForUpdate(client: PoolClient, id: number): Promise<ReservationRow | null>;
   findActiveReservationsForHamster(
-    executor: DbExecutor,
+    executor: DbExecutor | undefined,
     hamsterId: string,
     excludeReservationId?: number
   ): Promise<ReservationRow[]>;
   findUserReservationsForHamster(
-    executor: DbExecutor,
+    executor: DbExecutor | undefined,
     userId: string,
     hamsterId: string,
     excludeReservationId?: number
@@ -67,13 +68,43 @@ export interface IReservationRepository {
   updateOutboxStatus(id: number, status: 'SENT' | 'FAILED'): Promise<void>;
   getAllHamsters(): Promise<HamsterRow[]>;
   getReservations(userId?: string, status?: string): Promise<ReservationRow[]>;
-  findPendingReservationsBeforeTime(cutoffTime: Date): Promise<ReservationRow[]>;
+  findPendingReservationsBeforeTimeForUpdate(client: PoolClient, cutoffTime: Date): Promise<ReservationRow[]>;
   withTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T>;
 }
 
 export class PostgresReservationRepository implements IReservationRepository {
-  async findHamsterById(executor: DbExecutor, id: string): Promise<HamsterRow | null> {
-    const res = await executor.query('SELECT * FROM hamsters WHERE id = $1', [id]);
+  async initializeDatabase(): Promise<void> {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS hamsters (
+        id VARCHAR(50) PRIMARY KEY, name VARCHAR(100) NOT NULL,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        requires_approval BOOLEAN NOT NULL DEFAULT false
+      );
+      CREATE TABLE IF NOT EXISTS reservations (
+        id SERIAL PRIMARY KEY, user_id VARCHAR(50) NOT NULL,
+        hamster_id VARCHAR(50) NOT NULL REFERENCES hamsters(id),
+        start_time TIMESTAMPTZ NOT NULL, end_time TIMESTAMPTZ NOT NULL,
+        status VARCHAR(30) NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE TABLE IF NOT EXISTS notifications_outbox (
+        id SERIAL PRIMARY KEY, reservation_id INT NOT NULL,
+        recipient VARCHAR(100) NOT NULL, message TEXT NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+    await pool.query(`
+      INSERT INTO hamsters (id, name, is_active, requires_approval)
+      VALUES ('ferda', 'Ferda', true, false),
+             ('archimedes', 'Archimedes', true, true),
+             ('spavek', 'Spávek', false, false)
+      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name,
+        is_active = EXCLUDED.is_active, requires_approval = EXCLUDED.requires_approval;
+    `);
+  }
+
+  async findHamsterById(executor: DbExecutor | undefined, id: string): Promise<HamsterRow | null> {
+    const res = await (executor ?? pool).query('SELECT * FROM hamsters WHERE id = $1', [id]);
     return (res.rows[0] as HamsterRow) || null;
   }
 
@@ -82,8 +113,8 @@ export class PostgresReservationRepository implements IReservationRepository {
     return (res.rows[0] as HamsterRow) || null;
   }
 
-  async findReservationById(executor: DbExecutor, id: number): Promise<ReservationRow | null> {
-    const res = await executor.query('SELECT * FROM reservations WHERE id = $1', [id]);
+  async findReservationById(executor: DbExecutor | undefined, id: number): Promise<ReservationRow | null> {
+    const res = await (executor ?? pool).query('SELECT * FROM reservations WHERE id = $1', [id]);
     return (res.rows[0] as ReservationRow) || null;
   }
 
@@ -93,7 +124,7 @@ export class PostgresReservationRepository implements IReservationRepository {
   }
 
   async findActiveReservationsForHamster(
-    executor: DbExecutor,
+    executor: DbExecutor | undefined,
     hamsterId: string,
     excludeReservationId?: number
   ): Promise<ReservationRow[]> {
@@ -109,12 +140,12 @@ export class PostgresReservationRepository implements IReservationRepository {
       params.push(excludeReservationId);
     }
 
-    const res = await executor.query(query, params);
+    const res = await (executor ?? pool).query(query, params);
     return res.rows as ReservationRow[];
   }
 
   async findUserReservationsForHamster(
-    executor: DbExecutor,
+    executor: DbExecutor | undefined,
     userId: string,
     hamsterId: string,
     excludeReservationId?: number
@@ -132,7 +163,7 @@ export class PostgresReservationRepository implements IReservationRepository {
       params.push(excludeReservationId);
     }
 
-    const res = await executor.query(query, params);
+    const res = await (executor ?? pool).query(query, params);
     return res.rows as ReservationRow[];
   }
 
@@ -209,12 +240,14 @@ export class PostgresReservationRepository implements IReservationRepository {
     return res.rows as ReservationRow[];
   }
 
-  async findPendingReservationsBeforeTime(cutoffTime: Date): Promise<ReservationRow[]> {
-    const res = await pool.query(
+  async findPendingReservationsBeforeTimeForUpdate(client: PoolClient, cutoffTime: Date): Promise<ReservationRow[]> {
+    // Výběr i následné změny používají stejnou transakci a stejné zámky.
+    const res = await client.query(
       `SELECT * FROM reservations
        WHERE status = 'PENDING_APPROVAL'
          AND start_time <= $1
-       ORDER BY start_time ASC`,
+       ORDER BY id ASC
+       FOR UPDATE`,
       [cutoffTime]
     );
     return res.rows as ReservationRow[];

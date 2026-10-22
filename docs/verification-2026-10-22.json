@@ -1,0 +1,76 @@
+{
+  "baseCommit": "d8ed26feb8c19d73bc4320d5c24b082054b09632",
+  "state": "local uncommitted fixes",
+  "verifiedOn": "2026-10-22",
+  "environment": "Windows, Node.js 22.14.0, isolated local PostgreSQL 17.11",
+  "results": {
+    "build": "PASS",
+    "unit": 10,
+    "architecture": 4,
+    "baseline": 30,
+    "regression": 7,
+    "failures": 0
+  },
+  "files": [
+    {
+      "path": "package-lock.json",
+      "sha256": "296f77cb77325c2138e4f2cba006035a6b17381c1482e5a830eacf570ac44917"
+    },
+    {
+      "path": "package.json",
+      "sha256": "4c0c8813f34ffcddce7ff682b582a7eb7a87e173022bf7ede6b9359ce8711f6e"
+    },
+    {
+      "path": "src/app.ts",
+      "sha256": "88bafa4b7ec0b3f669f27162d2db54749e9344733b75e93a02f55ef9671d2604"
+    },
+    {
+      "path": "src/arch.test.ts",
+      "sha256": "a4a477fe6198c22d8a6a5537f048851f10aa6bed8aa675caef7bd5eac4e3dadf"
+    },
+    {
+      "path": "src/db.ts",
+      "sha256": "9b3eea0fc1836749d06e2562efafcb80d7a95792f3f581bd08eb582daac3c33e"
+    },
+    {
+      "path": "src/domain.test.ts",
+      "sha256": "16b45622db2faedfb367ff6ab315b90e7d3a5c410fe716233d8e53b6eb7cd3b8"
+    },
+    {
+      "path": "src/domain.ts",
+      "sha256": "70a3b2a994452d27c9418c61225594c6a59c7eb5e474b8e4ff569436b4fecff8"
+    },
+    {
+      "path": "src/index.ts",
+      "sha256": "e3e65a6c2746445a50b49ec4661d7b3784ba291cc8186e1da0f95f30e0475295"
+    },
+    {
+      "path": "src/notification.ts",
+      "sha256": "57d0e979fb3611834e366f98f2016b411ff9cf4cb24b968c9091509313545aaa"
+    },
+    {
+      "path": "src/regression.test.ts",
+      "sha256": "05887bcab4b8154d715803745a555274f7ee9b99b71d59e17dbd29d30e025cd4"
+    },
+    {
+      "path": "src/repository.ts",
+      "sha256": "b22dcc9db7e05cb11c1eeafec7ed519a3b9412fb346956c71e12ea7a3ad12a26"
+    },
+    {
+      "path": "src/service.ts",
+      "sha256": "91d2bbebaa8cb3ad32a54e9bd3c6e5c1a070da00fff95f9b0aa3f4e7758aa663"
+    },
+    {
+      "path": "src/spike.ts",
+      "sha256": "4e14f76f66a92188c6222ea61fdac0d16b3c1dc83d628bd211cc6a6cc3b40f01"
+    },
+    {
+      "path": "src/verify.ts",
+      "sha256": "56847403c33a19c1b55b9c62dde31556fda93abcf83c0f303cab1a71df994c90"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha256": "633b4018d3d09b854a5f413adfae4559acd58757dc5188710fcc623c943ab581"
+    }
+  ]
+}

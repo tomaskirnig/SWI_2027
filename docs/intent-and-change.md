@@ -66,9 +66,9 @@ Pro každou dvojici student–křeček smí součet potvrzených rezervací (`CO
 
 ## External / system boundary
 
-Služba pro odesílání oznámení.
+Hranice pro předání oznámení, v současném prototypu simulovaná přes NotificationSender.
 
-Po skutečném přechodu rezervace do stavu `CONFIRMED` nebo `CANCELLED` systém vytvoří požadavek na oznámení uživateli. Selhání doručení stav rezervace nevrací zpět; systém vrátí varování a oznámení později zopakuje.
+Po skutečném přechodu rezervace do stavu `CONFIRMED` nebo `CANCELLED` systém vytvoří požadavek na oznámení uživateli. Selhání doručení stav rezervace nevrací zpět; při přímém pokusu po Confirm/Cancel systém vrátí varování a zprávu ponechá jako FAILED. Výsledky schválení a expirace se evidují jako PENDING v outboxu. Automatický dispatcher ani retry worker nejsou implementované.
 
 ## Assumption
 
@@ -77,3 +77,7 @@ Předpokládáme, že každý student má školní e-mailovou adresu, na kterou 
 ## Unknown
 
 Baseline v0.1 vyřešila původní neznámou způsobu potvrzení: student spustí Confirm a systém rezervaci potvrdí automaticky, pokud jsou splněna pravidla. Zbývající neznámou jsou provozní parametry opakování nedoručených oznámení, zejména interval a maximální počet pokusů.
+
+## Rozšíření po C02/C03
+
+V baseline v0.2 blokují termín a čerpají limit CONFIRMED i PENDING_APPROVAL. REJECTED, EXPIRED a CANCELLED obě omezení uvolňují. Confirm používá čistou ConfirmationPolicy; perzistenci a transakce vlastní repository. OP-02 je veřejný čtecí dotaz. Konkrétní integrace školní identity a e-mailového providera zůstává mimo demonstrační rozsah.

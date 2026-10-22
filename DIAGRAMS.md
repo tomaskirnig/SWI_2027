@@ -6,6 +6,8 @@ Diagramy vycházejí z doménových pravidel a požadavků definovaných v [docs
 
 ---
 
+> Diagramy v0.1 jsou historický základ C02. Aktuální runtime C03/C05 popisuje docs/architecture-and-decisions.md. Notifikační hranice je simulovaná; Decide/Expire vytvářejí požadavky do outboxu. Automatický dispatcher není implementovaný.
+
 ## Obsah
 
 - [Část 1: Baseline v0.1 — Minimální systém](#část-1-baseline-v01--minimální-systém)
@@ -327,7 +329,7 @@ Tato část rozšiřuje systém podle **Části B zadání C02**:
    - Aby jiný student nemohl termín mezitím zabrat, rezervace ve stavu `PENDING_APPROVAL` **křečka dočasně blokuje a započítává se do denního limitu**.
 3. **Pravidla expirace a rušení:**
    - **Expirace schválení:** Pokud je rezervace stále ve stavu
-  `PENDING_APPROVAL` v okamžiku `currentTime >= start - 1h`, systém ji automaticky převede do `EXPIRED` a křeček i denní limit se uvolní.
+  `PENDING_APPROVAL` v okamžiku `currentTime >= start - 1h`, při nejbližší automatické nebo ruční kontrole ji systém převede do `EXPIRED` a křeček i denní limit se uvolní.
    - **Storno studentem:** Student může čekající žádost zrušit (`CANCELLED`) nejpozději 15 minut před začátkem rezervace, čímž se mu limit uvolní.
 
 ---
@@ -387,7 +389,6 @@ flowchart LR
     Student["👤 Student<br/><i>(primární aktér)</i>"]:::actorStyle
     Approver["🧑‍🏫 Správce křečka<br/><i>(oprávněná osoba)</i>"]:::actorStyle
     Timer["⏱️ Systémový časovač<br/><i>(automatický plánovač)</i>"]:::timerStyle
-    NotificationService["🔔 Notification Service<br/><i>(podpůrný externí systém)</i>"]:::extStyle
 
     subgraph System[" Systém Křečkomat (hranice systému v0.2) "]
         UC1(["OP-01: Vytvořit rezervaci (Create)"]):::ucStyle
@@ -405,9 +406,8 @@ flowchart LR
 
     Approver --> UC5
     Timer --> UC6
+    Approver --> UC6
 
-    UC3 -.->|"oznámení studentovi / žádost správci křečka"| NotificationService
-    UC4 -.->|"oznámení o zrušení"| NotificationService
-    UC5 -.->|"oznámení o schválení / zamítnutí studentovi"| NotificationService
-    UC6 -.->|"oznámení o vypršení termínu"| NotificationService
 ```
+
+Notifikační provider není skutečný externí aktér této demonstrační verze. Po Confirm/Cancel je vyvolán simulovaný pokus o předání; Decide/Expire ukládají požadavky do outboxu. Timer z části C03 běží uvnitř procesu, nikoli jako další služba.

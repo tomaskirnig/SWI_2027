@@ -32,14 +32,14 @@ Kompletní technická a architektonická dokumentace univerzitního rezervační
                                     │
 ┌───────────────────────────────────▼────────────────────────────────────┐
 │               Application & Domain Core Layer                          │
-│   src/service.ts: Orchestrace transakcí, Outbox pattern, scheduler     │
+│   src/service.ts: Orchestrace, použití policy, koordinace outboxu     │
 │   src/domain.ts:  Čisté doménové invarianty, IConfirmationPolicy       │
 └───────────────────┬────────────────────────────────┬───────────────────┘
                     │                                │
 ┌───────────────────▼──────────────┐   ┌─────────────▼───────────────────┐
 │  Persistence (src/repository.ts) │   │ Notification (src/notification) │
 │  IReservationRepository contract │   │ Simulace externí e-mail služby  │
-│  PostgresReservationRepository   │   │ Outbox tabulka s retry stavem   │
+│  PostgresReservationRepository   │   │ Simulovaný pokus o předání   │
 └───────────────────┬──────────────┘   └─────────────────────────────────┘
                     │ Connection Pool (SSL)
 ┌───────────────────▼────────────────────────────────────────────────────┐
@@ -48,7 +48,7 @@ Kompletní technická a architektonická dokumentace univerzitního rezervační
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Runtime:** Node.js (TypeScript v5, spouštěno přes `tsx` ve vývoji, kompilace přes `tsc`).
+- **Runtime:** Node.js (TypeScript, spouštěno přes `tsx` ve vývoji, kompilace přes `tsc`).
 - **Webový server:** Express.js 5 s podporou simulace časového posunu (`x-current-time` hlavička).
 - **Databáze:** PostgreSQL běžící v cloudu (Supabase) s SSL šifrováním a transakční izolací.
 - **Frontend:** Responzivní jednohodinový SPA frontend bez frameworkové režie v [public/index.html](public/index.html).
@@ -102,7 +102,7 @@ Každá operace je formálně specifikována v [docs/reservation-specification.m
 4. `BR-04`: Denní limit 30 minut na studenta a křečka, striktně dělený přes půlnoc v pásmu `Europe/Prague`.
 5. `BR-05`: Zpožděné schvalování křečků s příznakem `requires_approval = true`.
 6. `BR-06`: Transactional Outbox pattern pro spolehlivé notifikace (selhání e-mailové služby nesmí shodit commit rezervace).
-7. `BR-07`: Správce smí rozhodovat o žádosti pouze s předstihem větším než 1 hodina před začátkem.
+7. `BR-07`: Aktivní křeček je podmínkou rezervování a schválení. Lhůta rozhodnutí správce patří do BR-03.
 
 #### 4. Diagramy a specifikace
 - Use Case diagramy pro v0.1 i v0.2 v [DIAGRAMS.md](DIAGRAMS.md).
@@ -111,7 +111,7 @@ Každá operace je formálně specifikována v [docs/reservation-specification.m
 
 #### 5. Automatizované ověření baseline ([src/verify.ts](src/verify.ts))
 - Sada 30 exaktních automatizovaných scénářů (`V-01` až `V-26`) využívající striktní `node:assert/strict`.
-- Pokrývá úspěšné cesty, hraniční stavy, souběh, překročení limitů i selhání externí notifikace (`npm run verify` &rarr; **30 PASS / 0 FAIL**).
+- Pokrývá úspěšné cesty, hraniční stavy, souběh, překročení limitů i selhání simulované notifikace. `npm run verify` spustí také 7 regresních scénářů: **30 + 7 PASS / 0 FAIL**.
 
 ---
 
@@ -143,7 +143,7 @@ V [docs/architecture-and-decisions.md](docs/architecture-and-decisions.md) byly 
 - **Nová vrstva [src/repository.ts](src/repository.ts):** Definováno rozhraní `IReservationRepository` a implementace `PostgresReservationRepository`. Veškeré SQL dotazy (`SELECT ... FOR UPDATE`, `INSERT INTO reservations`, zápisy do outboxu) byly vyčleněny ze services.
 - **Očištění kontroleru [src/app.ts](src/app.ts):** Odstraněn přímý import databázového `pool` i raw SQL dotazy; kontroler komunikuje pouze přes rozhraní služeb a repozitáře.
 - **Automatický plánovač v [src/index.ts](src/index.ts):** Funkce `startExpiryScheduler()` spouští periodickou kontrolu expirací na pozadí s automatickým recovery po startu serveru (`runExpiryCheck()`).
-- **Architektonický test [src/arch.test.ts](src/arch.test.ts):** Statická kontrola importů a kontraktů chránící L2 architekturu (`npm run test:arch` &rarr; **3 PASS**).
+- **Architektonický test [src/arch.test.ts](src/arch.test.ts):** Statická kontrola importů a kontraktů chránící L2 architekturu (`npm run test:arch` &rarr; **4 PASS**).
 
 ---
 
@@ -189,7 +189,7 @@ Algoritmus probíhá v deterministickém pořadí:
 7. Větvení cílového stavu dle příznaku `requiresApproval`.
 
 #### 4. Izolovaný unit test suite ([src/domain.test.ts](src/domain.test.ts))
-10 odvozených unit testů spouštěných čistě v paměti (`npm run test:unit` &rarr; **10 PASS / 0 FAIL**, běh < 250 ms):
+10 odvozených unit testů spouštěných čistě v paměti (`npm run test:unit` &rarr; **10 PASS / 0 FAIL**):
 - `T-DD-01`: Neplatný interval (`start >= end`) okamžitě vrátí `INVALID_INTERVAL`.
 - `T-DD-02`: Potvrzení 14 minut před začátkem vrátí `LEAD_TIME_VIOLATION`.
 - `T-DD-03`: Neaktivní křeček (*Spávek*) vrátí `HAMSTER_INACTIVE`.
@@ -200,7 +200,7 @@ Algoritmus probíhá v deterministickém pořadí:
 
 #### 5. Hloubková obhajoba testovací úrovně & evidence
 - V [docs/evidence-and-evolution.md](docs/evidence-and-evolution.md) podrobně zdůvodněna volba unit úrovně pro testy `T-DD-02` (časový předstih jako čistá matematika bez závislosti na OS hodinách) a `T-DD-06B` (rozpad půlnoci v pásmu `Europe/Prague` bez režie databáze).
-- Zpracována matice *Design ↔ Implementation consistency* potvrzující stoprocentní shodu kódu s návrhem.
+- Zpracována matice *Design ↔ Implementation consistency* zaznamenávající návrh, nalezené rozdíly a jejich vyřešení.
 
 ---
 
@@ -259,8 +259,8 @@ Systém disponuje třemi nezávislými vrstvami automatizovaného testování a 
 | Příkaz | Typ testu | Rozsah / Význam | Výsledek |
 |---|---|---|:---:|
 | `npm run test:unit` | **Unit testy (C05)** | 10 in-memory testů kontraktu `IConfirmationPolicy` a doménových invariantů | `10 PASS / 0 FAIL` |
-| `npm run test:arch` | **Architektonické testy (C03)** | Statická kontrola oddělení vrstev L2 (Controller &rarr; Service &rarr; Repository &rarr; Domain) | `3 PASS / 0 FAIL` |
-| `npm run verify` | **Integrační verifikace (C02)** | 30 scénářů Specification Baseline proti reálné PostgreSQL databázi na cloudu | `30 PASS / 0 FAIL` |
+| `npm run test:arch` | **Architektonické testy (C03)** | Statická kontrola oddělení vrstev L2 (API a doména bez DB; služba bez SQL; kontrakt repository) | `4 PASS / 0 FAIL` |
+| `npm run verify` | **Integrační verifikace (C02)** | 30 scénářů baseline a 7 regresí proti oddělené testovací PostgreSQL | `30 + 7 PASS / 0 FAIL` |
 | `npm run build` | **Type check & Kompilace** | Striktní typová kontrola TypeScriptu do složky `dist/` | `0 chyb (OK)` |
 
 ---
@@ -284,6 +284,7 @@ SWI_2027/
 │   ├── notification.ts                   # Abstrakce externí e-mailové služby (Transactional Outbox)
 │   ├── app.ts                            # REST API kontrolery a Express middleware
 │   ├── index.ts                          # Vstupní bod serveru a in-process plánovač expirací
+│   ├── regression.test.ts                # HTTP policy a souběh/rollback expirací
 │   ├── verify.ts                         # Integrační testovací sada Specification Baseline (C02)
 │   ├── arch.test.ts                      # Automatický test architektonických pravidel (C03)
 │   ├── db.ts                             # PostgreSQL connection pool konfigurace
@@ -293,3 +294,7 @@ SWI_2027/
 ├── package.json                           # Závislosti a npm skripty
 └── .env.example                           # Vzor konfigurace prostředí (bezpečné hodnoty)
 ```
+
+## Upřesnění implementace po kontrole 22. 10. 2026
+
+Přijaté diagramy a rozhraní jsou v docs/architecture-and-decisions.md (G1 až C05). Logické služby jsou skupiny funkcí v service.ts. Technické transakce, SQL, schéma a zámky vlastní repository; Confirm volá skutečnou ConfirmationPolicy. NotificationSender je simulace, nikoli zapojený SMTP/HTTP provider. Výsledky Decide/Expire a zprávy správci se evidují v outboxu jako PENDING; runtime neobsahuje Outbox Dispatcher ani automatický retry. Aktuální výsledky a zbývající omezení viz docs/evidence-and-evolution.md.

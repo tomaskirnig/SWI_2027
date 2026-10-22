@@ -75,9 +75,11 @@ Všechny klíčové příkazy jsou definovány v `package.json`:
 | `npm run build` | **Kompilace** TypeScriptu do složky `dist/` pomocí `tsc`. |
 | `npm start` | **Produkční start** zkompilovaného serveru z `dist/index.js`. |
 | `npm run spike` | **Engineering Spike (C01)** — rychlé ověření spojení s PostgreSQL a zápisu/čtení testovací rezervace. |
-| `npm run verify` | **Automatizované ověření C02** — spustí všech 30 scénářů Specification Baseline proti PostgreSQL (`30 PASS / 0 FAIL`). |
+| `npm run verify` | **Automatizované ověření C02** — spustí 30 scénářů baseline a 7 regresních scénářů nad oddělenou PostgreSQL. |
 | `npm run test:unit` | **Unit testy Detailed Designu (C05)** — 10 izolovaných unit testů v paměti ověřujících kontrakt `IConfirmationPolicy`. |
-| `npm run test:arch` | **Architektonické testy (C03)** — statické ověření oddělení vrstev (L2 conformance: Controller -> Service -> Repository -> Domain). |
+| `npm run test:arch` | **Architektonické testy (C03)** — statické ověření oddělení vrstev (4 kontroly: API a doména bez DB, kontrakt repository, služba bez SQL). |
+
+Pro samostatný běh nových regresí použijte `npm run verify:regression`. Ověřovací sady mažou rezervace a outbox v nakonfigurované databázi; používejte pouze oddělenou testovací databázi.
 
 Server standardně naslouchá na portu definovaném v `.env` (výchozí: `http://localhost:3000`).
 
@@ -147,3 +149,11 @@ provede přechod `DRAFT → PENDING_APPROVAL`.
 Stav `PENDING_APPROVAL` dočasně blokuje křečka a čerpá denní limit,
 dokud správce žádost neschválí, nezamítne, student ji nezruší nebo
 nedojde k její expiraci.
+
+## Aktuální rozsah prototypu
+
+Confirm používá ConfirmationPolicy a repository.withTransaction. Automatická kontrola expirace běží při startu a standardně po 30 s (EXPIRY_CHECK_INTERVAL_MS); ruční endpoint je dostupný také. Výběr expirací je zamčený ve stejné transakci jako zápis stavu a outboxu.
+
+NotificationSender je simulovaný. Confirm a nový Cancel provedou po COMMIT jeden pokus o předání, bez vrácení business změny při selhání. Oznámení správci a výsledky Decide/Expire se pouze uloží jako PENDING. Dispatcher ani automatické opakování nejsou součástí současné verze. Dotaz Availability je veřejný.
+
+Ověření oprav z 22. 10. 2026 a identifikace pracovní verze: [evidence](docs/evidence-and-evolution.md#ověření-oprav-22-10-2026).

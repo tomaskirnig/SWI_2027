@@ -28,7 +28,7 @@ implementace realizuje scénář `Confirm Reservation`, kde je uložen
 stav rezervace, kde se rozhoduje o jeho změně, kde jsou vynucována
 business pravidla a na jaké technické závislosti scénář spoléhá.
 
-Analýza vychází ze skutečného kódu aplikace z C02, nikoliv z návrhu
+Historická AS-IS analýza vychází z C02 commitu b055079. Po refaktoringu C03 zůstává dokladem původního stavu, nikoliv popisem dnešních souborů. Nevychází z návrhu
 budoucí architektury.
 
 ---
@@ -516,7 +516,7 @@ Alternativa B — Samostatný runtime worker proces
 
 | Driver / kritérium | Alternativa A (In-process modul) | Alternativa B (Samostatný runtime worker) |
 |---|---|---|
-| **Konzistence a invarianty (`BR-02`, `BR-03`)** | Přímé volání doménové služby v rámci stejné transakce/DB poolu; minimální prodleva mezi časovou hranicí a expirací; okamžitá konzistence. | Stejná databázová transakce, ale worker provádí polling v periodických intervalech; mírné zpoždění reakce na hranici `start - 1h` v závislosti na intervalu workeru. |
+| **Konzistence a invarianty (`BR-02`, `BR-03`)** | Kontrola v témže procesu, standardně každých 30 s; zámky stejné DB transakce chrání jediný přechod. Expirace nastane při nejbližší kontrole po hranici. | Stejné transakční zámky; samostatný worker také kontroluje periodicky. Prodleva závisí na nastaveném intervalu, nikoliv pouze na počtu procesů. |
 | **Chování při selhání (Failure behaviour)** | Pokud spadne aplikační proces, zastaví se i časovač; po restartu však první kontrola okamžitě zpracuje všechny expirované žádosti (idempotentní restart recovery). | Pád webového serveru neovlivní worker expirací; pád workeru neovlivní HTTP API. Vyžaduje však samostatný monitoring dvou běžících služeb. |
 | **Změna / ownership** | Jednotná codebase a sdílené doménové entity; změna pravidel expirace či schválení je na jednom místě; nižší režie vývoje. | Přísná procesní izolace; nutnost sdílet doménový kód/knihovnu mezi dvěma procesy nebo komunikovat přes interní API / DB kontrakt. |
 | **Provozní složitost** | Nízká; jeden proces, jedno nasazení, nulová nutnost externího orchestrátoru procesů; ideální pro prototyp a cvičení. | Vyšší; vyžaduje správu více procesů (Docker compose, PM2, Kubernetes cronjob), složitější CI/CD pipeline a lokální debugování. |
@@ -562,513 +562,337 @@ Sledovaný scénář: `Confirm Reservation` pro křečka vyžadujícího schvál
   Přijata **Alternativa A** — delayed approval workflow i časovač expirací jsou organizovány jako samostatný doménový modul `Approval Workflow` uvnitř stejného monolitického Node.js procesu, napojený na společnou PostgreSQL databázi. Modul je navržen s jasným rozhraním, které umožní budoucí fyzické vyčlenění do samostatného workeru bez změny doménové logiky.
 
 - **Důvod:**  
-  Alternativa A splňuje všechny požadavky na transakční bezpečnost a zachování invariantů při dramaticky nižší provozní složitosti. Všechny operace probíhají v PostgreSQL transakcích s `FOR UPDATE`, takže atomicita přechodů je zaručena. Při restartu aplikace je zajištěna okamžitá obnova, kdy úvodní běh zpracuje všechny expirované žádosti.
+  Alternativa A splňuje všechny požadavky na transakční bezpečnost a zachování invariantů při dramaticky nižší provozní složitosti. Confirm, Cancel, Decide a Expire používají repository.withTransaction a řádkové zámky. Změna stavu i požadavek na oznámení patří do stejné transakce. Při restartu aplikace je zajištěna okamžitá obnova, kdy úvodní běh zpracuje všechny expirované žádosti.
 
 - **Přijaté negativní důsledky:**  
   Při úplném pádu jediného Node.js procesu se hlídání expirací dočasně pozastaví, dokud proces nenastartuje znovu. Časovač sdílí výpočetní zdroje s HTTP serverem (v daném měřítku systému zanedbatelné).
 
 - **Rozhodnutí znovu otevřeme, když:**  
-  Zátěž systému vzroste natolik, že kontrola expirací začne ovlivňovat latenci HTTP požadavků, nebo pokud bude vyžadováno horizontální škálování webové vrstvy na více instancí (kde by in-process timer vyžadoval distribuovaný zámek).
+  Zátěž systému vzroste natolik, že kontrola expirací začne ovlivňovat latenci HTTP požadavků, nebo pokud bude vyžadováno horizontální škálování webové vrstvy na více instancí (kde je třeba posoudit náklady více timerů; správnost přechodů nadále chrání databázové zámky).
 
 ---
 
-# Část G1: Kontextový diagram systému
+# Část G1: Kontext systému
+
+```mermaid
+flowchart LR
+    Student[Student] -->|Create, Availability, Confirm, Cancel| System[Křečkomat]
+    Manager[Správce křečka] -->|Approve, Reject, ruční Expire| System
+    System -->|čtení a uložení rezervací a outboxu| DB[(PostgreSQL)]
+```
+
+Notification Service je v prototypu simulovaná přes `NotificationSender` uvnitř aplikace. Externí SMTP/HTTP provider není zapojený. Availability je veřejný čtecí dotaz; identita studenta a role správce jsou pro demonstrační změnové operace předávané klientem.
+
+# Část G2: Přijatá statická architektura
 
 ```mermaid
 flowchart TD
-    subgraph Users["Externí aktéři"]
-        Student["👤 Student"]
-        Manager["🧑‍🏫 Správce křečka"]
+    subgraph System[Křečkomat]
+        API["HTTP API: app.ts"]
+        RM["Reservation Management: service.ts<br/>owns: Create, Confirm, Cancel"]
+        AW["Approval Workflow: service.ts<br/>owns: Decide, Expire"]
+        AV["Availability: service.ts<br/>owns: veřejné čtecí dotazy"]
+        Policy["ConfirmationPolicy: domain.ts<br/>owns: podmínky a výsledek potvrzení"]
+        Repo["Repository: repository.ts<br/>owns: SQL, transakce, zámky, uložení outboxu"]
+        Notif["Notification Integration: notification.ts<br/>owns: simulovaný pokus o předání"]
     end
-
-    ReservationSystem["🏢 Křečkomat — Rezervační systém"]
-
-    subgraph External["Externí systémy"]
-        NotifService["🔔 Notification Service"]
-    end
-
-    Student -- "vytvoření návrhu (OP-01)\nověření dostupnosti (OP-02)\npotvrzení rezervace (OP-03)\nzrušení rezervace (OP-04)" --> ReservationSystem
-    Manager -- "schválení / zamítnutí žádosti (OP-05)\nspuštění expirace (OP-06)" --> ReservationSystem
-    ReservationSystem -- "požadavek na odeslání e-mailu\n(Transactional Outbox)" --> NotifService
+    DB[(PostgreSQL)]
+    API -->|Create, Confirm, Cancel| RM
+    API -->|Decide, Expire| AW
+    API -->|Availability| AV
+    RM -->|evaluate| Policy
+    RM -->|withTransaction, čtení, zápisy| Repo
+    AW -->|withTransaction, čtení, zápisy| Repo
+    AV -->|čtení| Repo
+    RM -->|sendNotification po COMMIT| Notif
+    Repo -->|SQL| DB
 ```
 
----
+Logické prvky Reservation Management, Approval Workflow a Availability jsou skupiny funkcí v jednom modulu `service.ts`, nikoli tři dodatečné třídy. `ConfirmationPolicy` je skutečná třída. Služba určuje rozsah business operace a přes `withTransaction(callback)` předává repository její transakční tělo. Repository vlastní technické BEGIN/COMMIT/ROLLBACK i uvolnění klienta. Policy nerozhoduje autorizaci a neprovádí I/O.
 
-# Část G2: TO-BE statická architektura
+Požadavek na oznámení se ukládá do outboxu ve stejné transakci jako změna rezervace. Po Confirm a novém Cancel následuje jeden pokus přes simulovaný odesílač; služba zaznamená SENT/FAILED a případné varování. Oznámení správci, výsledek Decide a zprávy Expire zůstávají PENDING. Background dispatcher ani automatický retry nejsou implementované a nejsou slibem této verze.
 
-Seskupení odpovědností do logických architektonických prvků s explicitním vlastnictvím stavu a invariantů:
+# Část G3: Ownership přechodů
 
-```mermaid
-flowchart TD
-    subgraph ReservationSystem["Křečkomat System Boundary"]
-        subgraph API["Web & API Layer"]
-            HTTPAdapter["HTTP / REST Controller"]
-        end
-
-        subgraph Core["Domain & Application Core"]
-            ResMgmt["Reservation Management\nrole: životní cyklus rezervací\nowns: Reservation lifecycle (DRAFT, CONFIRMED, CANCELLED)"]
-            AvailModule["Availability\nrole: zjišťování dostupnosti křečků\nowns: Availability queries"]
-            ApprWorkflow["Approval Workflow\nrole: schvalování a expirace\nowns: Approval state (PENDING_APPROVAL, REJECTED, EXPIRED)"]
-        end
-
-        subgraph Integration["Infrastructure & Integration"]
-            RepoModule["Reservation Persistence\nrole: transakční ukládání a načítání\nowns: Database transaction boundary & locking"]
-            NotifInteg["Notification Integration\nrole: správa outboxu a volání externí služby\nowns: Outbox delivery state"]
-        end
-    end
-
-    ExtNotif["🔔 Notification Service"]
-    ExtDB[("🗄️ PostgreSQL Database")]
-
-    HTTPAdapter --> ResMgmt
-    HTTPAdapter --> AvailModule
-    HTTPAdapter --> ApprWorkflow
-
-    ResMgmt --> AvailModule
-    ResMgmt --> RepoModule
-    ResMgmt --> NotifInteg
-
-    ApprWorkflow --> RepoModule
-    ApprWorkflow --> NotifInteg
-
-    AvailModule --> RepoModule
-
-    RepoModule --> ExtDB
-    NotifInteg --> ExtNotif
-    NotifInteg --> ExtDB
-```
-
----
-
-# Část G3: Ownership přechodů ve statechartu z C02
-
-| Přechod | Owner rozhodnutí (z G2) | Kdo může transition pouze vyžádat | Invariant / podmínka přechodu |
+| Přechod | Owner rozhodnutí | Kdo jej vyžádá | Podmínka |
 |---|---|---|---|
-| `[neexistuje] → DRAFT` | **Reservation Management** | Student (OP-01) | Platný interval, křeček aktivní, předstih >= 15 min, předběžná kontrola limitu |
-| `DRAFT → CONFIRMED` | **Reservation Management** | Student (OP-03) | `currentTime <= start - 15 min`, křeček nevyžaduje schválení, žádný překryv (`BR-02`), limit <= 30 min |
-| `DRAFT → PENDING_APPROVAL` | **Reservation Management** | Student (OP-03) | `currentTime <= start - 15 min`, křeček vyžaduje schválení, žádný překryv (`BR-02`), limit <= 30 min |
-| `PENDING_APPROVAL → CONFIRMED` | **Approval Workflow** | Správce křečka (OP-05 Approve) | `currentTime < start - 1h`, křeček aktivní, role správce |
-| `PENDING_APPROVAL → REJECTED` | **Approval Workflow** | Správce křečka (OP-05 Reject) | `currentTime < start - 1h`, role správce; uvolňuje blokaci a denní limit |
-| `PENDING_APPROVAL → EXPIRED` | **Approval Workflow** | Časovač expirací / Timer (OP-06) | `currentTime >= start - 1h`; uvolňuje blokaci a denní limit |
-| `DRAFT → CANCELLED` | **Reservation Management** | Student (OP-04) | Vlastník rezervace, `currentTime <= start - 15 min` |
-| `CONFIRMED → CANCELLED` | **Reservation Management** | Student (OP-04) | Vlastník rezervace, `currentTime <= start - 15 min`; uvolňuje křečka i limit |
-| `PENDING_APPROVAL → CANCELLED` | **Reservation Management** | Student (OP-04) | Vlastník rezervace, `currentTime <= start - 15 min`; uvolňuje křečka i limit |
-| `CANCELLED → CANCELLED` | **Reservation Management** | Student (OP-04) | Idempotentní opakování bez změny dat a bez notifikace |
+| vznik → DRAFT | Reservation Management | Student | Platný interval, aktivita, předstih, předběžná dostupnost a limit |
+| DRAFT → CONFIRMED | Reservation Management s ConfirmationPolicy | Student | BR-01 až BR-05, BR-07; křeček nevyžaduje schválení |
+| DRAFT → PENDING_APPROVAL | Reservation Management s ConfirmationPolicy | Student | Stejná kontrola; křeček vyžaduje schválení |
+| PENDING_APPROVAL → CONFIRMED | Approval Workflow | Správce | Aktivní křeček, oprávněná role, currentTime < start - 1h |
+| PENDING_APPROVAL → REJECTED | Approval Workflow | Správce | Oprávněná role, currentTime < start - 1h |
+| PENDING_APPROVAL → EXPIRED | Approval Workflow | Timer nebo ruční endpoint | currentTime >= start - 1h, řádek stále čeká pod zámkem |
+| DRAFT / CONFIRMED / PENDING_APPROVAL → CANCELLED | Reservation Management | Vlastník | currentTime <= start - 15 min |
+| CANCELLED → CANCELLED | Reservation Management | Vlastník | Idempotentní odpověď, žádný nový přechod ani oznámení |
 
----
+Rozhodnutí o přechodu je vždy pod zámkem příslušné rezervace. Confirm navíc zamyká křečka kvůli konfliktům a dennímu limitu. Expire vybírá čekající řádky pomocí stejného klienta a `FOR UPDATE` jako následné změny; souběžný Cancel nebo další Expire nemůže přepsat dokončený přechod.
 
 # Část G4: Runtime / deployment mapping
 
-Mapování logických komponent z G2 do konkrétních běhových procesů:
-
 ```mermaid
 flowchart TD
-    subgraph Host["Běhové prostředí (Single Node / Container)"]
-        subgraph ProcessApp["Node.js Application Process (PID 1)"]
-            subgraph ExpressServer["Express HTTP Server (port 3000)"]
-                CompAPI["HTTP / REST Controller"]
-            end
-            subgraph AppServices["Aplikační a doménové služby"]
-                CompRes["Reservation Management"]
-                CompAvail["Availability"]
-                CompAppr["Approval Workflow"]
-                CompTimer["In-Process Expiry Timer (Interval Loop)"]
-            end
-            subgraph DataAdapters["Perzistenční a integrační adaptéry"]
-                CompRepo["Reservation Repository"]
-                CompNotif["Notification Outbox Dispatcher"]
-            end
-        end
+    subgraph Process[Node.js proces]
+        API[Express HTTP server]
+        Service["service.ts: Reservation Management, Approval Workflow, Availability"]
+        Policy["domain.ts: ConfirmationPolicy a časové funkce"]
+        Timer["index.ts: kontrola při startu a intervalový timer"]
+        Repo["repository.ts + db.ts: SQL, transakce, pg pool"]
+        Stub["notification.ts: simulovaný NotificationSender"]
+        API --> Service
+        Timer -->|expirePendingReservations| Service
+        Service --> Policy
+        Service --> Repo
+        Service -->|pokus po Confirm/Cancel| Stub
     end
-
-    subgraph ManagedCloud["Cloudové služby"]
-        PostgresDB[("🗄️ PostgreSQL (Supabase)\ntabulky: hamsters, reservations, notifications_outbox")]
-        ExtEmailService["🔔 External Notification Service (HTTP REST / SMTP)"]
-    end
-
-    CompAPI --> AppServices
-    AppServices --> DataAdapters
-    CompTimer --> CompAppr
-
-    DataAdapters -- "SSL Connection (pg pool)\nTCP 5432" --> PostgresDB
-    CompNotif -- "HTTPS REST API" --> ExtEmailService
+    Repo -->|pg spojení| DB[(PostgreSQL: reservations, hamsters, notifications_outbox)]
 ```
 
----
+Standardní interval kontroly expirace je 30 000 ms, měnitelný přes `EXPIRY_CHECK_INTERVAL_MS`. Hranice způsobilosti je `start - 1h`; skutečný přechod nastane při nejbližší dokončené kontrole. Po restartu se kontrola provede před spuštěním HTTP serveru. Externí notifikační runtime v této verzi neběží.
 
-# Část H1: Návrhový sekvenční diagram (Confirm Reservation)
-
-Realizace scénáře Confirm Reservation v přijaté TO-BE architektuře včetně větvení pro kolizi (`alt` větev) a pro křečka vyžadujícího schválení:
+# Část H1: Návrhová sekvence Confirm Reservation
 
 ```mermaid
 sequenceDiagram
-    autonumber
-    actor Student as 👤 Student
-    participant Controller as HTTP Controller
-    participant ResMgmt as Reservation Management
-    participant Repo as Reservation Repository
-    participant DB as 🗄️ PostgreSQL
-    participant Notif as Notification Integration
-
-    Student ->> Controller: POST /api/reservations/{id}/confirm
-    Controller ->> ResMgmt: confirmReservation(id, userId, currentTime)
-    
-    ResMgmt ->> Repo: beginTransaction()
-    Repo ->> DB: BEGIN
-    
-    ResMgmt ->> Repo: findAndLockReservation(id)
-    Repo ->> DB: SELECT * FROM reservations WHERE id = $1 FOR UPDATE
-    DB -->> Repo: reservation row
-    Repo -->> ResMgmt: reservation entity
-    
-    ResMgmt ->> ResMgmt: validateOwnerAndDraft(reservation, userId)
-    ResMgmt ->> ResMgmt: validateTiming(reservation, currentTime)
-    
-    ResMgmt ->> Repo: findAndLockHamster(reservation.hamsterId)
-    Repo ->> DB: SELECT * FROM hamsters WHERE id = $1 FOR UPDATE
-    DB -->> Repo: hamster row
-    Repo -->> ResMgmt: hamster entity
-    
-    ResMgmt ->> Repo: findConflictingReservations(hamsterId, interval)
-    Repo ->> DB: SELECT * FROM reservations WHERE hamster_id = $1 AND status IN ('CONFIRMED', 'PENDING_APPROVAL')
-    DB -->> Repo: conflicting rows
-    Repo -->> ResMgmt: active reservations list
-
-    alt Kolize intervalů nebo překročen denní limit 30 min
-        ResMgmt ->> ResMgmt: detectConflictOrLimitViolation()
-        ResMgmt ->> Repo: rollbackTransaction()
-        Repo ->> DB: ROLLBACK
-        ResMgmt -->> Controller: throw ConflictError (409)
-        Controller -->> Student: 409 Conflict (kolize termínu / limit vyčerpán)
-    else Všechna pravidla splněna
-        alt Hamster requires approval
-            ResMgmt ->> ResMgmt: targetStatus = PENDING_APPROVAL
-        else Běžný křeček
-            ResMgmt ->> ResMgmt: targetStatus = CONFIRMED
+    actor Student
+    participant API as app.ts
+    participant Svc as Reservation Management
+    participant Repo as IReservationRepository
+    participant Policy as ConfirmationPolicy
+    participant DB as PostgreSQL
+    participant Notif as Notification Integration (stub)
+    Student->>API: POST /api/reservations/:id/confirm
+    API->>Svc: confirmReservation(id, userId, now)
+    Svc->>Repo: withTransaction(callback)
+    Repo->>DB: BEGIN
+    Note over Svc,Repo: Následuje tělo callbacku se stejným klientem
+    Svc->>Repo: findReservationByIdForUpdate(client, id)
+    Repo->>DB: SELECT reservation FOR UPDATE
+    Svc->>Svc: ověřit existenci a vlastníka
+    Svc->>Repo: findHamsterByIdForUpdate(client, hamsterId)
+    Repo->>DB: SELECT hamster FOR UPDATE
+    Svc->>Repo: findActiveReservationsForHamster(client, hamsterId, id)
+    Svc->>Repo: findUserReservationsForHamster(client, userId, hamsterId, id)
+    Svc->>Svc: sestavit mapu minut po pražských dnech
+    Svc->>Policy: evaluate(candidate, hamster, slots, minutes, now)
+    alt Neplatná podmínka
+        Policy-->>Svc: ok=false, code, message
+        Svc-->>Repo: callback vyhodí chybu
+        Repo->>DB: ROLLBACK
+        API-->>Student: 409 pro kolizi, jinak 400
+    else Podmínky splněny
+        Policy-->>Svc: ok=true, targetStatus
+        Svc->>Repo: updateReservationStatus(client, id, targetStatus)
+        Svc->>Repo: insertOutboxNotification(client, id, student, message)
+        opt PENDING_APPROVAL
+            Svc->>Repo: insertOutboxNotification(client, id, správce, message)
         end
-
-        ResMgmt ->> Repo: updateReservationStatus(id, targetStatus)
-        Repo ->> DB: UPDATE reservations SET status = $2 WHERE id = $1
-        
-        ResMgmt ->> Notif: queueNotification(recipient, messageType, payload)
-        Notif ->> Repo: saveOutboxMessage(message)
-        Repo ->> DB: INSERT INTO notifications_outbox ...
-        
-        ResMgmt ->> Repo: commitTransaction()
-        Repo ->> DB: COMMIT
-        
-        ResMgmt ->> Notif: triggerDispatch()
-        Note over Notif: Pokus o odeslání (selhání nevrátí DB commit)
-        
-        ResMgmt -->> Controller: ConfirmResult(id, targetStatus)
-        Controller -->> Student: 200 OK (id, targetStatus)
+        Repo->>DB: COMMIT
+        Note over Svc,Repo: Transakční klient je uvolněn
+        Svc->>Notif: sendNotification(student, message)
+        Svc->>Repo: updateOutboxStatus(id, SENT nebo FAILED)
+        API-->>Student: 200, id, targetStatus, případně warning
     end
 ```
 
----
+Neexistující rezervace/křeček a cizí vlastník se odmítají samostatně 404/403. Selhání simulovaného odesílače probíhá až po COMMIT a změnu rezervace nevrací zpět.
 
-# Část H2: Zaměřený návrhový třídní diagram
-
-Třídní diagram znázorňuje strukturální vlastníky všech operací a zpráv ze sekvenčního diagramu H1 a definuje rozhraní pro perzistenci i notifikace:
+# Část H2: Zaměřený návrhový třídní / modulový pohled
 
 ```mermaid
 classDiagram
-    class ReservationController {
-        -ReservationService reservationService
-        +confirm(req, res) Promise
-        +cancel(req, res) Promise
+    class ReservationOperations {
+        <<module>>
+        +confirmReservation(id, userId, now)
+        +cancelReservation(id, userId, now)
+        +decideReservation(id, role, decision, now)
+        +expirePendingReservations(now)
     }
-
-    class ReservationService {
-        -IReservationRepository repository
-        -INotificationService notificationService
-        +confirmReservation(id, userId, currentTime) Promise~Reservation~
-        +cancelReservation(id, userId, currentTime) Promise~Reservation~
-        -checkConflict(hamsterId, interval, tx) Promise~boolean~
-        -checkDailyLimit(userId, hamsterId, interval, tx) Promise~boolean~
-    }
-
-    class ApprovalService {
-        -IReservationRepository repository
-        -INotificationService notificationService
-        +approveReservation(id, managerId, currentTime) Promise~Reservation~
-        +rejectReservation(id, managerId, currentTime) Promise~Reservation~
-        +expirePendingReservations(currentTime) Promise~int~
-    }
-
     class IReservationRepository {
         <<interface>>
-        +beginTransaction() Promise~Transaction~
-        +commitTransaction(tx) Promise~void~
-        +rollbackTransaction(tx) Promise~void~
-        +findAndLockReservation(id, tx) Promise~Reservation~
-        +findAndLockHamster(id, tx) Promise~Hamster~
-        +findActiveReservations(hamsterId, start, end, tx) Promise~Reservation[]~
-        +updateReservationStatus(id, status, tx) Promise~void~
-        +saveOutboxNotification(outboxEntry, tx) Promise~void~
+        +withTransaction(callback)
+        +findReservationByIdForUpdate(client, id)
+        +findHamsterByIdForUpdate(client, id)
+        +findActiveReservationsForHamster(client, hamsterId, excludeId)
+        +findUserReservationsForHamster(client, userId, hamsterId, excludeId)
+        +findPendingReservationsBeforeTimeForUpdate(client, cutoff)
+        +updateReservationStatus(client, id, status)
+        +insertOutboxNotification(client, id, recipient, message)
+        +updateOutboxStatus(id, status)
     }
-
-    class PostgresReservationRepository {
-        -Pool pool
-        +beginTransaction() Promise~PoolClient~
-        +findAndLockReservation(id, client) Promise~Reservation~
-        +updateReservationStatus(id, status, client) Promise~void~
-        +saveOutboxNotification(entry, client) Promise~void~
-    }
-
-    class INotificationService {
+    class PostgresReservationRepository
+    class IConfirmationPolicy {
         <<interface>>
-        +queueNotification(recipient, message, tx) Promise~void~
-        +dispatchOutbox() Promise~void~
+        +evaluate(candidate, hamster, slots, minutes, now) ConfirmationResult
     }
-
-    class NotificationServiceAdapter {
-        -NotificationSender sender
-        +queueNotification(recipient, message, tx) Promise~void~
-        +dispatchOutbox() Promise~void~
+    class ConfirmationPolicy
+    class NotificationIntegration {
+        <<module>>
+        +sendNotification(recipient, message)
     }
-
-    class Reservation {
-        +int id
-        +string userId
-        +string hamsterId
-        +DateTime start
-        +DateTime end
-        +string status
-        +isConfirmed() boolean
-        +isPendingApproval() boolean
+    class ReservationRow {
+        +id
+        +user_id
+        +hamster_id
+        +start_time
+        +end_time
+        +status
     }
-
-    class Hamster {
-        +string id
-        +string name
-        +boolean isActive
-        +boolean requiresApproval
+    class HamsterRow {
+        +id
+        +is_active
+        +requires_approval
     }
-
-    ReservationController --> ReservationService : volá
-    ReservationService --> IReservationRepository : načítá a ukládá
-    ReservationService --> INotificationService : eviduje oznámení
-    ApprovalService --> IReservationRepository : načítá a ukládá
-    ApprovalService --> INotificationService : eviduje oznámení
-
-    IReservationRepository <|.. PostgresReservationRepository : implementuje
-    INotificationService <|.. NotificationServiceAdapter : implementuje
-
-    ReservationService ..> Reservation : manipuluje
-    ReservationService ..> Hamster : vyhodnocuje
+    IReservationRepository <|.. PostgresReservationRepository
+    IConfirmationPolicy <|.. ConfirmationPolicy
+    ReservationOperations --> IReservationRepository
+    ReservationOperations --> IConfirmationPolicy
+    ReservationOperations --> NotificationIntegration
+    PostgresReservationRepository ..> ReservationRow
+    PostgresReservationRepository ..> HamsterRow
 ```
 
----
+`ReservationOperations` znamená exportované funkce v `service.ts`, `NotificationIntegration` funkce v `notification.ts`. Diagram nevyžaduje další frameworkové třídy. Struktura odpovídá skutečným názvům rozhraní a metod; databázový klient zná pouze služba v těle transakčního callbacku a repository, nikdy čistá policy.
 
 # Část I: Cross-view kontrola
 
-| Kontrola | Ověřovaná otázka | Výsledek a zhodnocení v návrhu |
-|---|---|---|
-| **C02 ↔ G2** | Umí architektura realizovat požadované chování a pravidla? | **Ano.** Komponenty `Reservation Management` a `Approval Workflow` plně pokrývají `OP-01` až `OP-06` a striktně vynucují pravidla `BR-01` až `BR-07`. |
-| **C2 ↔ G2** | Má každá významná odpovědnost jednoho ownera? | **Ano.** Životní cyklus rezervace vlastní `Reservation Management`, schvalovací proces a expiraci `Approval Workflow`, transakční perzistenci `Reservation Persistence` a notifikace `Notification Integration`. Žádná odpovědnost není duplicitní. |
-| **G2 ↔ H1** | Používá sekvence pouze existující / povolené závislosti? | **Ano.** Sekvenční diagram H1 volá výhradně směry definované v G2: Controller → Reservation Management → Repository & Notification Integration. |
-| **H1 ↔ H2** | Má každá významná zpráva / operace strukturálního vlastníka? | **Ano.** Všechny metody v sekvenci (`confirmReservation`, `findAndLockReservation`, `saveOutboxNotification`) mají své explicitní signatury a vlastníky v třídním diagramu H2. |
-| **statechart ↔ G3/H1** | Rozhoduje transition správný owner? | **Ano.** Přechody do `CONFIRMED` a `PENDING_APPROVAL` rozhoduje `Reservation Management`, přechody ze schválení a expirace rozhoduje `Approval Workflow`. Odpovídá tabulce G3 i větvení v H1. |
-| **G2 ↔ G4** | Je každý logický prvek realisticky namapovaný do runtime? | **Ano.** Všechny logické prvky jsou realisticky umístěny uvnitř jediného Node.js procesu běžícího nad společným pool PostgreSQL (Supabase). |
-| **ADR ↔ G2/G4** | Je přijaté rozhodnutí skutečně vidět v architektuře? | **Ano.** Rozhodnutí ADR-01 (In-process modul pro approval a expiraci v monolitickém procesu) je přímo znázorněno v G2 jako propojené moduly a v G4 jako runtime moduly uvnitř procesu PID 1. |
+| Vazba | Ověřený vztah |
+|---|---|
+| C02 ↔ G2 | Všechny OP-01 až OP-06 mají logického vlastníka; oznámení rozlišují pokus a pouhé uložení požadavku. |
+| C2 ↔ G2 | Služba orchestruje, policy vyhodnocuje Confirm, repository vlastní SQL/transakce, stub pouze předání. |
+| G2 ↔ H1 | Sekvence používá stejné závislosti; technické transakce a outbox patří repository. |
+| H1 ↔ H2 | Volané metody existují ve zobrazených modulech/rozhraních. |
+| statechart ↔ G3/H1 | Přechod závisí na aktuálním stavu pod zámkem; Cancel a Expire respektují pořadí operací. |
+| G2 ↔ G4 | Logické prvky jsou namapované do jednoho Node.js procesu a PostgreSQL. Stub je uvnitř procesu. |
+| ADR ↔ G2/G4 | In-process timer, restart recovery a transakční ochrana odpovídají variantě A. |
 
----
+Při kontrole 22. 10. 2026 byly nalezeny a vyřešeny rozdíly: nenapojená policy, nezamčený výběr expirací, fiktivní dispatcher a rozdílné popisy transakčního rozhraní. Behaviorální a architektonické doklady jsou v `docs/evidence-and-evolution.md`.
 
-# Část J: AS-IS → TO-BE delta matice
+# Část J: AS-IS → TO-BE delta
 
-| Oblast | AS-IS implementace | TO-BE architektura | Akce |
-|---|---|---|:---:|
-| **Změna stavu rezervace** | Spojeno v `service.ts` v jedné proceduře s přímým SQL. | Oddělená doménová služba `ReservationService` / `ApprovalService` s autoritativním řízením přechodů. | `KEEP` |
-| **Perzistenční vrstva (Repository)** | Neexistuje; SQL dotazy jsou psány přímo v `service.ts`. | Explicitní rozhraní repozitáře `repository.ts` vyčleňující SQL dotazy od orchestrace. | `CHANGE` |
-| **Hlídání expirací (Scheduler)** | Pouze manuálně volaný endpoint `POST /api/reservations/expire`. | In-process neblokující timer spouštějící periodickou kontrolu expirací. | `CHANGE` |
-| **Transakční izolace souběhu** | `SELECT ... FOR UPDATE` v atomické transakci zajišťující `BR-02`. | Zachování `SELECT ... FOR UPDATE` pod rozhraním repozitáře. | `KEEP` |
-| **Čisté doménové funkce (`domain.ts`)** | Nezávislé čisté funkce pro intervaly a překryvy. | Ponechány beze změny jako základ doménového jádra. | `KEEP` |
-| **Architektonické pravidlo** | Žádná automatická kontrola zákazů závislostí. | Vytvoření opakovatelného architektonického testu chránícího vrstvy (např. zákaz importu `pg` mimo repository/db). | `CHANGE` |
+AS-IS je historická C02 implementace zachycená v části A; její původní trace se nepřepisuje na dnešní kód.
 
----
+| Oblast | AS-IS | Přijatý výsledek | Akce |
+|---|---|---|---|
+| SQL a transakce | Přímo v service.ts | Repository a withTransaction(callback) | CHANGE |
+| Confirm pravidla | Kontroly uvnitř služby | ConfirmationPolicy.evaluate volaná skutečným Confirm | CHANGE |
+| Expirace | Ruční spuštění | Timer + recovery; výběr FOR UPDATE ve stejné transakci | CHANGE |
+| Blokující stavy a denní limit | CONFIRMED/PENDING_APPROVAL; 30 min | Stejné business pravidlo pod zámkem křečka | KEEP |
+| Notifikační hranice | Simulovaný odesílač, outbox | Zachovat prototyp, jasně popsat rozsah bez dispatchera | KEEP |
+| Kontrola vrstev a souběhu | Bez opakovatelné kontroly vlastnictví | ARCH-01 až ARCH-04 a R-01 až R-07 | VERIFY |
 
 # C05 Detailed Design
 
 ## 1. Selected architecture unit / responsibility
-- **Selected architecture unit / responsibility:** `Reservation Confirmation & Availability Policy` (v rámci `Reservation Management` a doménového jádra v [src/domain.ts](../src/domain.ts) a [src/service.ts](../src/service.ts)).
-- **Related requirement(s):** `REQ-01`, `REQ-02`, `REQ-03`, `REQ-07`, `REQ-10`, `REQ-11`
-- **Related scenario(s):** Confirm Reservation (`OP-03`), Check Availability (`OP-02`)
-- **Relevant business rule(s):** `BR-01` (polouzavřený interval), `BR-02` (zákaz překryvu), `BR-03` (předstih 15 minut), `BR-04` (denní limit 30 minut rozpadlý přes půlnoc v `Europe/Prague`), `BR-05` (schvalovací proces pro křečka s dohledem).
+
+- **Unit:** `ConfirmationPolicy` uvnitř Reservation Management.
+- **Related requirements:** REQ-05, REQ-06 a REQ-07, rozšířené pravidly baseline v0.2.
+- **Scenario:** OP-03 Confirm Reservation; běžné potvrzení i žádost PENDING_APPROVAL.
+- **Rules:** BR-01 až BR-05 a BR-07. Čisté intervalové funkce sdílí Availability, celý ConfirmationPolicy se však pro veřejný dotaz OP-02 nepoužívá.
 
 ## 2. Detailed responsibilities
-| Detailed responsibility | Why is it needed? |
+
+| Responsibility | Proč je potřeba |
 |---|---|
-| **DR-01: Validate Time Interval** | Ověřit syntax a platnost intervalu [start, end) — start < end, platná data, kladná nenulová délka (`BR-01`). |
-| **DR-02: Check Advance Lead Time** | Vynutit pravidlo `BR-03` (`currentTime <= start - 15 min`), aby student nepotvrzoval termín na poslední chvíli. |
-| **DR-03: Assess Hamster Availability & Status** | Zkontrolovat, zda křeček existuje a je aktivní (`isActive = true`), a vyhodnotit nutnost schválení (`requiresApproval`). |
-| **DR-04: Detect Slot Collisions** | Ověřit nekoliznost intervalu vůči všem existujícím rezervacím křečka ve stavu `CONFIRMED` i `PENDING_APPROVAL` (`BR-02`). |
-| **DR-05: Enforce Daily User Quota** | Vypočítat a zkontrolovat, že součet minut studenta u křečka nepřekročí 30 minut v žádném kalendářním dni pásma `Europe/Prague` (`BR-04`). |
-| **DR-06: Resolve Target State & Outcome** | Rozhodnout deterministicky cílový stav (`CONFIRMED` vs `PENDING_APPROVAL` dle `BR-05`) a sestavit výsledek včetně případných chybových kódů. |
+| DR-01 Validovat interval | Neplatné datum nebo start >= end nesmí vést k alokaci. |
+| DR-02 Ověřit předstih | Confirm vyžaduje currentTime <= start - 15 min. |
+| DR-03 Posoudit aktivitu a režim křečka | Aktivita umožňuje potvrzení, režim určuje potřebu schválení. Existenci reference ověřuje služba. |
+| DR-04 Vyhodnotit kolize | CONFIRMED i PENDING_APPROVAL blokují; dotyk intervalů ne. |
+| DR-05 Ověřit denní limit | Nejvýše 30 min pro student–křeček po dnech Europe/Prague. |
+| DR-06 Vrátit výsledek a cílový stav | DRAFT může přejít jen do CONFIRMED/PENDING_APPROVAL; chyba má rozlišitelný kód. |
 
 ## 3. Design elements and ownership
-| Responsibility | Owner | State/data | Why here? |
+
+| Responsibility | Owner | Data/state | Důvod |
 |---|---|---|---|
-| DR-01, DR-02, DR-03, DR-04, DR-05, DR-06 | `ConfirmationPolicy` (`IConfirmationPolicy`) | Vstupní kandidát, pole existujících slotů, mapa denních minut, referenční čas | Čistá doménová logika bez I/O. Zajišťuje stoprocentní unit testovatelnost v paměti bez DB. |
-| Načtení dat pod zámkem (`FOR UPDATE`) a orchestrace | `ReservationService` | Transakční klient DB | Vlastní transakční hranici a aplikační orchestraci běhu operace OP-03. |
-| Zápis změn stavu a outbox notifikace | `IReservationRepository` | PostgreSQL tabulky `reservations`, `notifications_outbox` | Izoluje SQL dotazy a perzistenci od doménových pravidel. |
+| DR-01 až DR-06 | ConfirmationPolicy | Kandidát, profil křečka, blokující sloty, mapa minut a referenční čas | Čisté rozhodnutí bez I/O a změn vstupů. |
+| Identita, existence, načtení pod zámkem a orchestrace | confirmReservation v service.ts | Rezervace a křeček pod zámkem, transakční callback | Autoritativní vstupní data pro policy. |
+| SQL, COMMIT/ROLLBACK, trvalý stav a outbox | IReservationRepository | PostgreSQL | Oddělení technologie od pravidel. |
 
-## 4. Key interface(s) / contract(s)
+## 4. Key interface / contract
 
-### Interface `IConfirmationPolicy`
 ```typescript
-export interface IConfirmationPolicy {
-  evaluate(
-    candidate: ConfirmationCandidate,
-    hamster: HamsterProfile,
-    existingConfirmedIntervals: TimeInterval[],
-    userDailyMinutes: Map<string, number>,
-    currentTime: Date
-  ): ConfirmationResult;
-}
+evaluate(candidate: ConfirmationCandidate, hamster: HamsterProfile,
+         existingConfirmedIntervals: TimeInterval[],
+         userDailyMinutes: Map<string, number>, currentTime: Date): ConfirmationResult;
 ```
 
-#### Contract:
-- **Preconditions:**
-  - `candidate` obsahuje validní ID studenta a křečka, počáteční a koncový čas a výchozí stav (`DRAFT`).
-  - `hamster` obsahuje platný identifikační profil křečka (aktivita, nutnost schválení).
-  - `currentTime` je platná instance `Date`.
-- **Postconditions:**
-  - Pokud jsou splněna všechna pravidla `BR-01` až `BR-05`, vrátí `{ ok: true, targetStatus, message }`, kde `targetStatus` je `CONFIRMED` (pokud `requiresApproval = false`) nebo `PENDING_APPROVAL` (pokud `requiresApproval = true`).
-  - Žádné vedlejší efekty na databázi ani globální stav (čistá deterministická funkce).
-- **Failures (Error Codes):**
-  - `INVALID_INTERVAL`: `start >= end` nebo neplatné datum.
-  - `LEAD_TIME_VIOLATION`: `currentTime > start - 15 minut`.
-  - `HAMSTER_INACTIVE`: křeček má `isActive = false`.
-  - `INVALID_STATE`: kandidát není ve výchozím stavu `DRAFT` (např. již byl zrušen či potvrzen).
-  - `SLOT_CONFLICT`: překryv s existujícím potvrzeným termínem křečka.
-  - `DAILY_LIMIT_EXCEEDED`: součet minut překročí 30 minut v daném kalendářním dni `Europe/Prague`.
+**Preconditions:** služba ověřila reference a vlastníka; vstupní sloty zahrnují CONFIRMED i PENDING_APPROVAL stejného křečka bez kandidáta. Mapa minut zahrnuje stejnou dvojici student–křeček bez kandidáta. `currentTime` je platný referenční čas. Platnost intervalu a stav DRAFT ověřuje sama policy.
+
+**Postconditions:** při splnění pravidel `{ok:true, targetStatus, message}`, jinak `{ok:false, code, message, details?}`. Policy nic neukládá, nemění vstupy ani stav rezervace. Garantuje rozhodnutí nad předanými daty; jejich aktuálnost při zápisu zajišťují zámky služby/repository.
+
+**Failures:** INVALID_INTERVAL, LEAD_TIME_VIOLATION, HAMSTER_INACTIVE, INVALID_STATE, SLOT_CONFLICT, DAILY_LIMIT_EXCEEDED. Služba mapuje kolizi na HTTP 409, ostatní porušení policy na 400. Autorizace a existence jsou samostatné 403/404.
 
 ## 5. Focused structural view
 
 ```mermaid
 classDiagram
-    direction TB
-
+    class ReservationManagement {
+        <<module>>
+        +confirmReservation(id, userId, now)
+    }
     class IConfirmationPolicy {
         <<interface>>
-        +evaluate(candidate, hamster, existingSlots, userDailyMinutes, currentTime) ConfirmationResult
+        +evaluate(candidate, hamster, slots, minutes, now) ConfirmationResult
     }
-
-    class ConfirmationPolicy {
-        +evaluate(candidate, hamster, existingSlots, userDailyMinutes, currentTime) ConfirmationResult
+    class ConfirmationPolicy
+    class ConfirmationCandidate
+    class HamsterProfile
+    class ConfirmationResult
+    class IReservationRepository {
+        <<interface>>
+        +withTransaction(callback)
     }
-
-    class ConfirmationCandidate {
-        +int id
-        +string userId
-        +string hamsterId
-        +DateTime start
-        +DateTime end
-        +ReservationStatus status
-    }
-
-    class HamsterProfile {
-        +string id
-        +string name
-        +boolean isActive
-        +boolean requiresApproval
-    }
-
-    class ConfirmationResult {
-        <<type>>
-        +boolean ok
-        +string targetStatus
-        +ConfirmationErrorCode code
-        +string message
-    }
-
-    class ReservationService {
-        -IReservationRepository repository
-        -IConfirmationPolicy policy
-        +confirmReservation(id, userId, now) Promise~Reservation~
-    }
-
-    IConfirmationPolicy <|.. ConfirmationPolicy : implements
-    ReservationService --> IConfirmationPolicy : uses
-    ConfirmationPolicy ..> ConfirmationCandidate : validates
-    ConfirmationPolicy ..> HamsterProfile : inspects
-    ConfirmationPolicy ..> ConfirmationResult : produces
+    IConfirmationPolicy <|.. ConfirmationPolicy
+    ReservationManagement --> IConfirmationPolicy
+    ReservationManagement --> IReservationRepository
+    ConfirmationPolicy ..> ConfirmationCandidate
+    ConfirmationPolicy ..> HamsterProfile
+    ConfirmationPolicy ..> ConfirmationResult
 ```
 
 ## 6. Detailed sequence
 
 ```mermaid
 sequenceDiagram
-    autonumber
-    actor Student
-    participant API as ReservationController (app.ts)
-    participant Svc as ReservationService (service.ts)
-    participant Repo as ReservationRepository (repository.ts)
-    participant Policy as ConfirmationPolicy (domain.ts)
-    participant DB as PostgreSQL (Supabase)
-
-    Student->>API: POST /api/reservations/:id/confirm { user_id }
-    API->>Svc: confirmReservation(id, userId, now)
-    Svc->>Repo: BEGIN TRANSACTION
-    Svc->>Repo: findReservationByIdForUpdate(client, id)
-    Repo->>DB: SELECT * FROM reservations WHERE id = $1 FOR UPDATE
-    DB-->>Repo: reservation row (DRAFT)
-    
-    Svc->>Repo: findHamsterByIdForUpdate(client, hamsterId)
-    Repo->>DB: SELECT * FROM hamsters WHERE id = $1 FOR UPDATE
-    DB-->>Repo: hamster row (Archimedes)
-
-    Svc->>Repo: findConflictingReservations(client, hamsterId, start, end)
-    Repo->>DB: SELECT * FROM reservations WHERE hamster_id = $1 AND status IN ('CONFIRMED', 'PENDING_APPROVAL')
-    DB-->>Repo: existing intervals []
-
-    Svc->>Repo: findUserReservationsForHamster(client, userId, hamsterId)
-    Repo->>DB: SELECT * FROM reservations WHERE user_id = $1 AND hamster_id = $2
-    DB-->>Repo: user reservations rows
-
-    Note over Svc,Policy: Čisté vyhodnocení Detailed Design kontraktu v paměti
-    Svc->>Policy: evaluate(candidate, hamster, existingIntervals, userDailyMinutes, now)
-    
-    alt Invariant porušen (např. SLOT_CONFLICT nebo DAILY_LIMIT_EXCEEDED)
-        Policy-->>Svc: { ok: false, code: 'SLOT_CONFLICT', message: '...' }
-        Svc->>Repo: ROLLBACK TRANSACTION
-        Svc-->>API: DomainError (409 Conflict / 400 Bad Request)
-        API-->>Student: 409 / 400 JSON { error }
-    else Všechna pravidla splněna
-        Policy-->>Svc: { ok: true, targetStatus: 'PENDING_APPROVAL', message: '...' }
-        Svc->>Repo: updateReservationStatus(client, id, 'PENDING_APPROVAL')
-        Repo->>DB: UPDATE reservations SET status = 'PENDING_APPROVAL' WHERE id = $1
-        Svc->>Repo: insertOutboxNotification(client, recipient, message)
-        Repo->>DB: INSERT INTO notifications_outbox ...
-        Svc->>Repo: COMMIT TRANSACTION
-        Svc-->>API: Updated Reservation
-        API-->>Student: 200 OK JSON { status: 'PENDING_APPROVAL' }
+    participant Svc as confirmReservation
+    participant Repo as IReservationRepository
+    participant Policy as ConfirmationPolicy
+    Svc->>Repo: withTransaction: zamknout rezervaci a křečka, načíst sloty a minuty
+    Svc->>Policy: evaluate(candidate, hamster, slots, minutes, now)
+    Policy->>Policy: isIntervalValid a isAtLeast15MinBefore
+    Policy->>Policy: aktivita a stav DRAFT
+    loop Blokující intervaly
+        Policy->>Policy: doIntervalsOverlap
+    end
+    Policy->>Policy: calculateMinutesPerDay + kontrola limitu
+    alt Porušení pravidla
+        Policy-->>Svc: ok=false + konkrétní kód
+        Svc-->>Repo: chyba callbacku: ROLLBACK
+    else Pravidla splněna
+        Policy-->>Svc: ok=true + cílový stav dle requiresApproval
+        Svc->>Repo: změna stavu a outbox ve stejném callbacku
+        Repo-->>Svc: COMMIT a uvolnění klienta
     end
 ```
 
+Pokus o předání oznámení až po COMMIT ukazuje úplná sekvence H1. Chybové větve algoritmu končí okamžitě; další kroky se po první chybě neprovádějí.
+
 ## 7. Important methods / operations
-- **Operace:** `ConfirmationPolicy.evaluate(candidate, hamster, existingSlots, userDailyMinutes, currentTime)`
-  - **Responsibility:** Autoritativní vyhodnocení podmínek pro potvrzení rezervace a určení cílového stavu.
-  - **Input:** `candidate` (navrhovaný termín a uživatel), `hamster` (stav a pravidla křečka), `existingSlots` (obsazené intervaly), `userDailyMinutes` (mapa vyčerpaných minut po dnech), `currentTime` (časový referenční bod).
-  - **Output:** `ConfirmationResult` (`ConfirmationSuccess` s cílovým stavem nebo `ConfirmationFailure` s chybovým kódem a kontextem).
-  - **Preconditions:** Kandidát má validní reference; časy jsou platné instance Date.
-  - **Postconditions:** Zaručuje, že žádná potvrzená rezervace neporuší pravidla `BR-01` až `BR-05`.
-  - **Side effects:** Žádné (čistá bezstavová funkce).
-  - **Failure behavior:** Deterministické vrácení objektu s `ok: false` a konkrétním kódem chyby (`INVALID_INTERVAL`, `LEAD_TIME_VIOLATION`, `HAMSTER_INACTIVE`, `INVALID_STATE`, `SLOT_CONFLICT`, `DAILY_LIMIT_EXCEEDED`).
+
+**Operation:** ConfirmationPolicy.evaluate. **Responsibility:** vyhodnotit podmínky Confirm. **Input:** kandidát, profil, blokující sloty, mapa minut a čas. **Output:** ConfirmationResult. **Preconditions:** data dle kontraktu výše. **Postconditions:** rozhodnutí s cílovým stavem nebo první chybou. **Side effects:** žádné. **Failure behavior:** vrácený objekt, nikoli I/O výjimka.
+
+**Operation:** calculateMinutesPerDay(start, end). **Responsibility:** rozdělit délku mezi pražské kalendářní dny. **Input:** platný interval. **Output:** mapa YYYY-MM-DD → minuty. **Preconditions:** platné start < end. **Postconditions:** součet odpovídá délce intervalu. **Side effects:** žádné. **Failure behavior:** validitu intervalu před voláním zajišťuje policy/služba.
 
 ## 8. Algorithm / decision logic
-Vyhodnocovací rozhodovací strom probíhá v deterministickém pořadí priorit:
-1. `IF !isIntervalValid(start, end) THEN RETURN INVALID_INTERVAL`
-2. `IF currentTime > start - 15 min THEN RETURN LEAD_TIME_VIOLATION`
-3. `IF !hamster.isActive THEN RETURN HAMSTER_INACTIVE`
-4. `IF candidate.status != 'DRAFT' THEN RETURN INVALID_STATE`
-5. `FOR EACH slot IN existingSlots: IF overlaps(candidate, slot) THEN RETURN SLOT_CONFLICT`
-6. `FOR EACH [day, mins] IN calculateMinutesPerDay(candidate): IF existing[day] + mins > 30 THEN RETURN DAILY_LIMIT_EXCEEDED`
-7. `IF hamster.requiresApproval THEN RETURN targetStatus = 'PENDING_APPROVAL' ELSE RETURN targetStatus = 'CONFIRMED'`
+
+1. Neplatný interval → INVALID_INTERVAL.
+2. currentTime > start - 15 min → LEAD_TIME_VIOLATION.
+3. Neaktivní křeček → HAMSTER_INACTIVE.
+4. Jiný stav než DRAFT → INVALID_STATE.
+5. Překryv s blokujícím slotem → SLOT_CONFLICT.
+6. Pro každý den přičíst kandidátovy minuty; součet > 30 → DAILY_LIMIT_EXCEEDED.
+7. requiresApproval → PENDING_APPROVAL, jinak CONFIRMED.
 
 ## 9. DD decisions intentionally left to code
-- Formátování textových chybových zpráv a lokalizace do češtiny.
-- Interní iterace v `Map<string, number>` a zaokrouhlování na milisekundy.
-- Mapování HTTP status kódů (400 vs 404 vs 409) v kontroleru.
 
+Formátování zpráv, konkrétní iterace nad mapou a pomocné sestavení vstupů z databázových řádků. Rozsah transakce, blokující stavy, pořadí rozhodnutí a návratové kódy jsou významná rozhodnutí popsaná výše. Ověření DD i napojení na HTTP je v evidence-and-evolution.md.

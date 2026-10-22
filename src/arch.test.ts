@@ -65,6 +65,13 @@ function checkArchitectureRules(): void {
   );
   console.log('[PASS] ARCH-03: Perzistenční vrstva (src/repository.ts) explicitně definuje IReservationRepository rozhraní.');
 
+  const serviceContent = fs.readFileSync(path.join(srcDir, 'service.ts'), 'utf8');
+  assert(!/from\s+['"](?:pg|\.\/db)['"]/.test(serviceContent),
+    'Aplikační služba nesmí přímo importovat pg ani db pool.');
+  assert(!/\.query\s*\(/.test(serviceContent),
+    'SQL a transakční příkazy patří do repository, nikoli do služby.');
+  console.log('[PASS] ARCH-04: Aplikační služba deleguje SQL a transakce na repository.');
+
   console.log('\n----------------------------------------');
   console.log('Architektonická pravidla: VŠECHNA SPLNĚNA');
   console.log('----------------------------------------\n');

@@ -1,4 +1,4 @@
-# Návrh Specification Baseline v0.1
+# Specification Baseline v0.1 a v0.2
 Tento dokument obsahuje přijatou Specification Baseline v0.1
 a její následné rozšíření Baseline v0.2.
 
@@ -6,6 +6,8 @@ Textové požadavky, společná pravidla a systémové diagramy prošly
 kontrolou přijetí a vzájemné konzistence. Baseline v0.2 zachovává
 původní pravidla v0.1 tam, kde nejsou explicitně rozšířena
 v oddílu 4.2.
+
+> Aktualizace prototypu 22. 10. 2026: C03 přidává automatickou kontrolu expirace. OP-02 je veřejný čtecí dotaz. U oznámení se rozlišuje pokus o předání po Confirm/Cancel a pouhé uložení požadavku po Decide/Expire; background dispatcher ani automatický retry tato verze neobsahuje.
 
 ## 1. Čtyři základní operace
 
@@ -91,16 +93,16 @@ Student zjistí, zda lze konkrétního křečka považovat za volného v požado
 
 **Spouštěcí událost:**
 
-Přihlášený student odešle dotaz obsahující identifikátor křečka, čas začátku a čas konce intervalu.
+Student nebo jiný klient odešle veřejný dotaz obsahující identifikátor křečka, čas začátku a čas konce intervalu.
 
 **Pozorovatelné požadavky:**
 
 - **REQ-03:** Pro existujícího aktivního křečka a platný interval systém vrátí `UNAVAILABLE`, pokud se interval překrývá s některou jeho rezervací `CONFIRMED`; jinak vrátí `AVAILABLE`. Neaktivní křeček je vždy `UNAVAILABLE`.
-- **REQ-04:** Neplatný nebo neoprávněný dotaz systém odmítne s rozlišitelným důvodem. Odmítnutí není výsledkem `AVAILABLE` ani `UNAVAILABLE` a dotaz nezmění žádná data.
+- **REQ-04:** Neplatný dotaz systém odmítne s rozlišitelným důvodem. Odmítnutí není výsledkem `AVAILABLE` ani `UNAVAILABLE` a dotaz nezmění žádná data.
 
 **Předpoklady:**
 
-- Student je systémem jednoznačně identifikován.
+- Dotaz nevyžaduje přihlášení; nezjišťuje osobní denní limit.
 - Křeček existuje.
 - Požadavek obsahuje jednoznačné časové okamžiky a platí `start < end`.
 
@@ -119,14 +121,14 @@ BR-01 — význam časového intervalu; BR-02 — zákaz překryvu potvrzených 
 **Hlavní úspěšný scénář:**
 
 1. Student zadá křečka a interval.
-2. Systém ověří identitu studenta, existenci křečka a platnost intervalu.
+2. Systém ověří existenci křečka a platnost intervalu.
 3. Systém zjistí aktivitu křečka a vyhledá jeho překrývající se rezervace `CONFIRMED`.
 4. Systém vrátí `AVAILABLE`, pokud je křeček aktivní a žádný překryv neexistuje; jinak vrátí `UNAVAILABLE`.
 5. Systém nezmění žádná data.
 
 **Alternativní / chybové výsledky:**
 
-- Neidentifikovaný student, neexistující křeček nebo neplatný interval → odmítnutí bez změny dat.
+- Neexistující křeček nebo neplatný interval → odmítnutí bez změny dat.
 - Neaktivní křeček → `UNAVAILABLE`.
 - Překryv s alespoň jednou rezervací `CONFIRMED` stejného křečka → `UNAVAILABLE`.
 - Překryv pouze s rezervacemi `DRAFT` nebo `CANCELLED` dostupnost neblokuje.
@@ -166,7 +168,7 @@ Přihlášený student požádá o potvrzení své rezervace podle jejího ident
 **Pozorovatelné požadavky:**
 
 - **REQ-05:** Systém potvrdí vlastní rezervaci `DRAFT` pouze tehdy, když křeček existuje a je aktivní, při rozhodnutí platí `currentTime <= start - 15 min`, interval nekoliduje s jinou rezervací `CONFIRMED` stejného křečka a potvrzením nebude překročen denní limit stejné dvojice student–křeček.
-- **REQ-06:** Při úspěchu systém změní tutéž rezervaci na `CONFIRMED`, vrátí její identifikátor a stav a předá oznámení Notification Service. Selhání předání oznámení změnu stavu nevrací zpět: systém zachová `CONFIRMED`, vrátí rozlišitelné varování, eviduje oznámení jako nedoručené a později jeho předání zopakuje. Při nesplnění podmínek potvrzení systém požadavek odmítne s rozlišitelným důvodem a rezervaci tímto požadavkem nezmění.
+- **REQ-06:** Při úspěchu systém změní tutéž rezervaci na `CONFIRMED`, vrátí její identifikátor a stav a předá oznámení Notification Service. Selhání předání oznámení změnu stavu nevrací zpět: systém zachová `CONFIRMED`, vrátí rozlišitelné varování, eviduje oznámení jako nedoručené pro případné pozdější opakování. Při nesplnění podmínek potvrzení systém požadavek odmítne s rozlišitelným důvodem a rezervaci tímto požadavkem nezmění.
 - **REQ-07:** Při souběžných potvrzeních musí zůstat zachován zákaz překryvu i denní limit; dva konfliktní návrhy nesmějí oba přejít do `CONFIRMED`.
 
 **Předpoklady:**
@@ -241,7 +243,7 @@ Přihlášený student požádá o zrušení své rezervace podle jejího identi
 
 **Pozorovatelné požadavky:**
 
-- **REQ-08:** Systém změní vlastní rezervaci ve stavu `DRAFT` nebo `CONFIRMED` na `CANCELLED`, pokud požadavek rozhodne nejpozději 15 minut před časem jejího začátku (`currentTime <= start - 15 min`). Záznam ani jeho identifikátor nesmaže, vrátí identifikátor a nový stav a předá oznámení Notification Service. Selhání předání oznámení změnu stavu nevrací zpět: systém zachová `CANCELLED`, vrátí rozlišitelné varování, eviduje oznámení jako nedoručené a později jeho předání zopakuje.
+- **REQ-08:** Systém změní vlastní rezervaci ve stavu `DRAFT` nebo `CONFIRMED` na `CANCELLED`, pokud požadavek rozhodne nejpozději 15 minut před časem jejího začátku (`currentTime <= start - 15 min`). Záznam ani jeho identifikátor nesmaže, vrátí identifikátor a nový stav a předá oznámení Notification Service. Selhání předání oznámení změnu stavu nevrací zpět: systém zachová `CANCELLED`, vrátí rozlišitelné varování, eviduje oznámení jako nedoručené pro případné pozdější opakování.
 - **REQ-09:** Neexistující nebo cizí rezervace vede k odmítnutí s rozlišitelným důvodem a bez změny rezervace. Nové zrušení rezervace `DRAFT` nebo `CONFIRMED` podané méně než 15 minut před začátkem nebo po něm (`currentTime > start - 15 min`) je odmítnuto. Opakované zrušení vlastní rezervace `CANCELLED` je idempotentní úspěch bez další změny a bez dalšího oznámení bez ohledu na aktuální čas.
 
 **Předpoklady:**
@@ -503,7 +505,7 @@ Někteří křečci (speciální/vzácní nebo vyžadující dohled) vyžadují 
   se při selhání zachová provedená změna rezervace, vrátí varování
   a záznam se označí `FAILED`. Samotné doručování záznamů správce
   a automatický retry worker nejsou součástí této baseline prototypu
-  a budou řešeny v C03.
+  a zůstávají možným navazujícím rozšířením.
 
 
 ---
@@ -517,8 +519,8 @@ Správce křečka posoudí čekající žádost studenta a autoritativně rozhod
 Oprávněný Správce křečka odešle rozhodnutí (`APPROVE` nebo `REJECT`) k existující rezervaci ve stavu `PENDING_APPROVAL`.
 
 **Pozorovatelné požadavky:**  
-- **REQ-10 (Schválení):** Pokud je rezervace ve stavu `PENDING_APPROVAL`, křeček je aktivní, platí `currentTime < start - 1h` a rozhodnutí je `APPROVE`, systém převede rezervaci do stavu `CONFIRMED`, zachová alokaci i započtení denního limitu a odešle oznámení studentovi.
-- **REQ-11 (Zamítnutí):** Pokud je rozhodnutí `REJECT`, systém převede rezervaci do stavu `REJECTED`, uvolní blokování křečka i denní limit studenta a odešle oznámení studentovi.
+- **REQ-10 (Schválení):** Pokud je rezervace ve stavu `PENDING_APPROVAL`, křeček je aktivní, platí `currentTime < start - 1h` a rozhodnutí je `APPROVE`, systém převede rezervaci do stavu `CONFIRMED`, zachová alokaci i započtení denního limitu a uloží právě jeden požadavek na oznámení studentovi do outboxu.
+- **REQ-11 (Zamítnutí):** Pokud je rozhodnutí `REJECT`, systém převede rezervaci do stavu `REJECTED`, uvolní blokování křečka i denní limit studenta a uloží právě jeden požadavek na oznámení studentovi do outboxu.
 - **REQ-12 (Neoprávněné / Neplatné rozhodnutí):** Pokus neoprávněné osoby nebo pokus rozhodnout rezervaci v jiném stavu než `PENDING_APPROVAL` systém odmítne bez změny dat.
 
 **Předpoklady:**  
@@ -564,7 +566,7 @@ Použijí se rozšíření pravidel pro baseline v0.2.
 Změnová karta C02, bod 12: vybrané prostředky vyžadují rozhodnutí oprávněné osoby před závazným potvrzením. Oddělení žádosti a rozhodnutí umožňuje zpoždění, zamítnutí a vypršení.
 
 **Příklady ověření:**  
-- **V-21:** Správce více než 1 hodinu před začátkem schválí platnou žádost `PENDING_APPROVAL` → přechod do `CONFIRMED`, student obdrží oznámení o schválení.
+- **V-21:** Správce více než 1 hodinu před začátkem schválí platnou žádost `PENDING_APPROVAL` → přechod do `CONFIRMED`, v outboxu vznikne právě jeden požadavek na oznámení o schválení studentovi.
 - **V-22:** Správce zamítne platnou žádost `PENDING_APPROVAL` → přechod do `REJECTED`, termín je okamžitě dostupný v `Check Availability` a studentovi se uvolní limit.
 - **V-23:** Student se pokusí zavolat OP-05 na vlastní žádost → odmítnuto z důvodu neoprávněného přístupu.
 - **V-24:** Pokus schválit rezervaci, která je již `CANCELLED`, `EXPIRED` nebo `CONFIRMED` → odmítnuto bez změny stavu.
@@ -577,7 +579,7 @@ Změnová karta C02, bod 12: vybrané prostředky vyžadují rozhodnutí oprávn
 Zabránit zablokování křečka a studentova denního limitu v případě, že správce křečka na žádost včas nezareaguje.
 
 **Spouštěcí událost:**  
-V demonstrační aplikaci se kontrola expirací vyvolává příkazem `POST /api/reservations/expire` nebo ověřovacím scénářem. Při kontrole systém převede způsobilé `PENDING_APPROVAL` na `EXPIRED` a uvolní jejich blokaci i limit. Automatické spouštění na pozadí (cron/scheduler worker) není součástí této demonstrační baseline a je předmětem architektonického návrhu v C03.
+Po změně v C03 se kontrola provádí při startu aplikace a periodicky in-process časovačem (výchozí interval 30 s, konfigurace `EXPIRY_CHECK_INTERVAL_MS`). Lze ji vyvolat i přes `POST /api/reservations/expire`. Při nejbližší kontrole po dosažení hranice systém převede stále čekající žádosti na `EXPIRED`; výběr `FOR UPDATE`, změna stavu i oba požadavky na oznámení používají jednu DB transakci. Souběžné Cancel/Decide/Expire respektují aktuální stav. Selhání zápisu znamená rollback celé operace.
 
 **Pozorovatelné požadavky:**  
 - **REQ-13:** Pokud je rezervace ve stavu `PENDING_APPROVAL` a do jejího začátku zbývá nejvýše 1 hodina (`currentTime >= start - 1h`), systém rezervaci převede do stavu `EXPIRED`.
@@ -586,3 +588,7 @@ V demonstrační aplikaci se kontrola expirací vyvolává příkazem `POST /api
 **Příklady ověření:**  
 - **V-25:** Žádost `PENDING_APPROVAL` přesně v čase `start - 1h` bez rozhodnutí správce → expirace ji změní na `EXPIRED`, křeček je volný pro ostatní a studentovi se uvolní denní limit.
 - **V-26:** Žádost `PENDING_APPROVAL` v čase `start - 2 hodiny` → expirace ji ponechá ve stavu `PENDING_APPROVAL`.
+
+## Doplňkové ověření po C03/C05
+
+R-01 až R-07 v src/regression.test.ts ověřují HTTP walking skeleton a použití policy, význam outboxu po Decide, oba průběhy Cancel × Expire, souběžné expirace bez duplicit, rollback expirace a denní limit při souběhu. Spouštění: npm run verify:regression (také součást npm run verify).

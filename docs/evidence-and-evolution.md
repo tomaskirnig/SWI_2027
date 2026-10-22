@@ -38,6 +38,8 @@ Ponecháváme knihovnu `pg` a připojení přes pool jako základ pro rezervačn
 
 ## Evidence C02: specifikace → běžící aplikace
 
+Historický záznam C02 před refaktoringem. Následující části C03/C05 a oddíl oprav z 22. 10. 2026 popisují další vývoj; nová ověření nejsou zpětně vydávána za původní běh.
+
 **Přijatá baseline:**  
 Specification Baseline v0.1 (základní operace Create, Check Availability, Confirm, Cancel) a Baseline v0.2 (rozšíření o schvalovací proces se správcem křečka a automatickou expiraci).
 
@@ -86,7 +88,7 @@ CELKEM: 30
 Všechny definované ověřovací scénáře prošly se striktními assertions úspěšně.
 
 - Datum nového běhu: 15. 10. 2026.
-- Commit implementace: aktuální revize větve `codex/c02-basic-operations`.
+- Referenční commit uložené C02 baseline: `b05507977e7aaa4c0132f206c4bc21c91024f184` (historická větev `codex/c02-basic-operations`).
 - Prostředí: dedikovaná cloudová PostgreSQL (Supabase).
 - Příkaz: `npm run verify`.
 - Výsledek: `30 PASS`, `0 FAIL`.
@@ -179,9 +181,9 @@ Detailně popsán v oddílu E3 pro scénář potvrzení rezervace křečka vyža
 - *context:* oddíl G1 (kontextový diagram s aktéry Student, Správce křečka a Notification Service)
 - *static architecture:* oddíl G2 (diagram komponent s explicitním vlastnictvím: `Reservation Management`, `Availability`, `Approval Workflow`, `Reservation Persistence`, `Notification Integration`)
 - *state ownership:* oddíl G3 (tabulka mapování přechodů statechartu na komponenty)
-- *runtime/deployment:* oddíl G4 (mapování komponent do Node.js procesu PID 1, napojení na PostgreSQL a Notification Service)
+- *runtime/deployment:* oddíl G4 (mapování komponent do jednoho Node.js procesu s interním notifikačním stubem a připojením k PostgreSQL)
 - *design sequence:* oddíl H1 (návrhový sekvenční diagram pro Confirm Reservation s větví `alt` pro kolizi a větvením pro approval)
-- *focused design class:* oddíl H2 (návrhový třídní diagram s `IReservationRepository`, `PostgresReservationRepository`, `ReservationService`, `ApprovalService`)
+- *focused design class:* oddíl H2 (návrhový třídní diagram se skutečnými repository/policy rozhraními a moduly exportovaných operací)
 
 **Cross-view issues found/resolved:**  
 Vyhodnoceno 7 vazeb v oddílu I; všechny vazby C02↔G2, C2↔G2, G2↔H1, H1↔H2, statechart↔G3/H1, G2↔G4 a ADR↔G2/G4 jsou vzájemně plně konzistentní.
@@ -203,20 +205,20 @@ Zpracována v oddílu J; identifikovány akce `CHANGE` pro vyčlenění perziste
 **Architecture conformance rule + result:**
 - *Architektonické pravidlo:* Žádný kontroler (`src/app.ts`) ani doménová logika (`src/domain.ts`) nesmí přímo importovat databázový ovladač `pg` ani db pool; perzistence je izolována v `src/repository.ts`. Doména `src/domain.ts` obsahuje pouze čisté funkce bez infrastruktury.
 - *Kontrola:* `npm run test:arch` (automatický skript `src/arch.test.ts`)
-- *Výsledek:* `ARCH-01 PASS`, `ARCH-02 PASS`, `ARCH-03 PASS`.
+- *Výsledek:* `ARCH-01 PASS` až `ARCH-04 PASS` (nové ověření 22. 10. 2026).
 
 **Remaining uncertainty / risk:**  
-V případě budoucího horizontálního škálování Node.js aplikace na více instancí bude nutné in-process timer doplnit o distribuovaný zámek (např. `pg_advisory_lock`) nebo vyčlenit do samostatného cron workeru (Alternativa B z ADR-01).
+Při více instancích zajišťují správnost expirací zámky PostgreSQL. Kvůli zátěži z více timerů může být později vhodný samostatný worker; jde o provozní rozhodnutí, ne podmínku správnosti této verze.
 
 **Commit / tag:**  
-Pracovní větev `C03`, připraveno pro odevzdání cvičení C03.
+Původní implementace C03: `021ffbc7dad925e6a190df3069772f755d5447ca`. Aktuální lokální opravy a ověření viz oddíl z 22. 10. 2026 níže.
 
 ---
 
 ## C05 DD Verification Evidence
 
 ### 1. Selected architecture unit / responsibility
-- **Unit:** `Reservation Confirmation & Availability Policy` (v rámci `Reservation Management` a [src/domain.ts](../src/domain.ts)).
+- **Unit:** `ConfirmationPolicy pro OP-03` (v rámci `Reservation Management` a [src/domain.ts](../src/domain.ts)).
 - **Scope:** Přísné deterministické vyhodnocení podmínek pro přechod rezervace z `DRAFT` do `CONFIRMED` / `PENDING_APPROVAL` (`BR-01` až `BR-05`).
 
 ### 2. Tests derived from DD
@@ -250,7 +252,7 @@ Odvozeno celkem 10 unit testů pokrývajících kontrakt rozhraní, větvení al
 ### 4. Unit / Component tests executed
 - **Příkaz:** `npm run test:unit` (`tsx src/domain.test.ts`)
 - **Výsledek:** `10 PASS`, `0 FAIL` (100% úspěšnost).
-- **Rychlost běhu:** < 250 ms (čistý in-memory běh bez I/O).
+- **Prostředí:** čistý in-memory běh bez databáze.
 
 ### 5. Design ↔ Implementation consistency matrix
 | DD element / decision | Implemented? | Evidence | Action |
@@ -261,12 +263,42 @@ Odvozeno celkem 10 unit testů pokrývajících kontrakt rozhraní, větvení al
 | Izolované unit testy odvozené z DD (T-DD-01 až T-DD-07) | `YES` | [src/domain.test.ts](../src/domain.test.ts) | `KEEP` |
 | NPM skript `test:unit` pro automatické spouštění | `YES` | [package.json](../package.json) | `KEEP` |
 | Zpětná kompatibilita s C02 integračními testy (30 scénářů) | `YES` | [src/verify.ts](../src/verify.ts) (`30 PASS / 0 FAIL`) | `KEEP` |
-| Architektonická pravidla L2 (izolace vrstev) | `YES` | [src/arch.test.ts](../src/arch.test.ts) (`3 PASS`) | `KEEP` |
+| Architektonická pravidla L2 (izolace vrstev) | `YES` | [src/arch.test.ts](../src/arch.test.ts) (`4 PASS`) | `KEEP` |
 
 ### 6. Design ↔ Implementation mismatch & resolution
-- **Neshoda:** Žádná. Implementace v [src/domain.ts](../src/domain.ts) plně odpovídá navrženému rozhraní a kontraktu v Detailed Designu.
-- **Rozhodnutí:** Ponecháno v souladu s návrhem.
+- **Nalezená neshoda (22. 10. 2026):** policy existovala jen jako izolovaná třída/testy a reálný Confirm ji nevolal. Neshoda je opravena: služba nyní používá její výsledek. R-01 ověřuje napojení přes HTTP i odmítnutí bez změny dat.
+- **Resolution:** zachovat čistý návrh policy, zapojit jej do skutečné operace a odstranit duplicitní rozhodování ze služby.
 
 ### 7. Remaining design risk
-- V případě budoucího zavedení dynamických cen nebo vícedenních rezervací bude nutné rozšířit kontrakt `IConfirmationPolicy` o parametr cenové politiky (`PricingPolicy`), stávající rozhraní je však pro požadavky Křečkomatu plně postačující a uzavřené.
+- Policy důvěřuje předaným slotům a mapě minut; konzistenci při zápisu musí zajistit stejná transakce a zámek křečka. R-07 proto ověřuje i souběh skutečných potvrzení. Produkční identita a skutečný notifikační provider zůstávají mimo rozsah prototypu.
 
+
+### C05 Commit/tag
+
+Původní implementace C05: `21f85bd0694ac355da76d3a762651acba81613ba`. Dnešní opravy jsou lokální pracovní změny nad mainem `d8ed26feb8c19d73bc4320d5c24b082054b09632`, nikoli nový commit.
+
+## Ověření oprav 22. 10. 2026
+
+**Verze:** main `d8ed26feb8c19d73bc4320d5c24b082054b09632` + lokální opravy z této kontroly. Přesnou podobu změněných zdrojů identifikuje [manifest](verification-2026-10-22.json). Změny nebyly commitnuté ani pushnuté.
+
+**Prostředí:** Windows, Node.js 22.14.0, samostatná lokální PostgreSQL 17.11; nepoužita sdílená Supabase. Testy mažou rezervace a outbox, proto patří výhradně do oddělené testovací DB.
+
+| Příkaz | Skutečný výsledek |
+|---|---|
+| npm run build | Bez chyb |
+| npm test | 10 unit PASS + 4 architektonické kontroly PASS |
+| npm run verify | 30 původních scénářů PASS + 7 regresních scénářů PASS |
+
+| Regrese | Ověřený návrhový záměr |
+|---|---|
+| R-01 | HTTP walking skeleton; Confirm respektuje skutečný výsledek policy; odmítnutí nemění data ani outbox. |
+| R-02 | Approve/Reject přidají právě jeden PENDING požadavek studentovi bez slibu doručení. |
+| R-03 | Zámek získaný expirací nedovolí souběžnému Cancel změnit EXPIRED. |
+| R-04 | Zámek získaný Cancel nedovolí expiraci přepsat CANCELLED. |
+| R-05 | Dvě současné expirace provedou jeden přechod a vytvoří dvě zprávy, nikoli čtyři. |
+| R-06 | Selhání zápisu outboxu vrátí zpět změnu stavu i dřívější zprávu ve stejné transakci. |
+| R-07 | Dvě nekolidující potvrzení stejné dvojice nepřekročí denní limit. |
+
+**Vyřešené rozdíly:** nezamčený výběr expirací, nepoužívaná ConfirmationPolicy, transakce mimo deklarovaného vlastníka, diagram neexistujícího dispatchera, rozpor mezi doručením a evidencí oznámení a nejasná veřejnost OP-02. Zdrojové změny mají odpovídající regresní doklady a C03/C05 pohledy byly upraveny podle přijatého rozsahu.
+
+**Remaining risk:** NotificationSender simuluje úspěch; zprávy Decide/Expire/správce zůstávají PENDING. Dispatcher, automatický retry a produkční autentizace jsou možné další rozšíření, ne ověřené funkce této verze. Periodická expirace reaguje při kontrole, nikoli v garantovaném reálném čase.
