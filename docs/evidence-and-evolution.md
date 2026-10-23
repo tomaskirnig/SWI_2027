@@ -302,3 +302,44 @@ Původní implementace C05: `21f85bd0694ac355da76d3a762651acba81613ba`. Dnešní
 **Vyřešené rozdíly:** nezamčený výběr expirací, nepoužívaná ConfirmationPolicy, transakce mimo deklarovaného vlastníka, diagram neexistujícího dispatchera, rozpor mezi doručením a evidencí oznámení a nejasná veřejnost OP-02. Zdrojové změny mají odpovídající regresní doklady a C03/C05 pohledy byly upraveny podle přijatého rozsahu.
 
 **Remaining risk:** NotificationSender simuluje úspěch; zprávy Decide/Expire/správce zůstávají PENDING. Dispatcher, automatický retry a produkční autentizace jsou možné další rozšíření, ne ověřené funkce této verze. Periodická expirace reaguje při kontrole, nikoli v garantovaném reálném čase.
+
+## C06 Internal Evidence Assessment
+
+**Datum owner review:** 23. 10. 2026.
+
+### Assessed baseline
+
+- Hodnocený commit: `996e9be8880187314e14d294c6fcc11974b50556`.
+- Hodnotící tým: Deadlock. Přijatý checklist a nálezy: [Hodnoceni_C06_Kreckomat v5.md](../Hodnoceni_C06_Kreckomat%20v5.md).
+- Kontrola vlastníků proběhla nad checkoutem `98a8a9a0fa9bfa98d54a1ec18e47cb3323fb88d3`; porovnání s hodnoceným commitem neukázalo změny v `src`, `public`, `docs`, `README.md` ani `package.json` před doplněním této reakce.
+
+### Verified findings
+
+- **F1 — zastaralý čas při rozhodnutí:** potvrzeno porovnáním REQ-05/BR-01 se službou a spuštěním původních funkcí Confirm/Approve s řízenými hodinami a simulovaným čekáním repository. Při překročení lhůty během čekání obě funkce nesprávně uspějí a požádají o změnu stavu i zápis outboxu. Kontrolní případy před lhůtou uspěly, požadavky přijaté po lhůtě byly odmítnuty bez požadavků na zápis.
+- **F2 — nesprávný denní limit v UI:** potvrzeno spuštěním původních frontendových funkcí v Node VM s náhradou DOM/API. Čekající žádost na 20 minut se započítá jako 0; rezervace začínající 00:10 v Praze se při UTC datu předchozího dne do správného dne nezapočte; interval 23:50–00:10 se do prvního dne započítá jako 20 místo 10 minut. Při již využitých 20 minutách UI zablokuje platný nový interval 23:50–00:10, ačkoli denní součty mají být 30 a 10 minut. Serverové překročení limitu nebylo tímto nálezem prokázáno.
+
+### Owner disposition
+
+| Položka | Rozhodnutí | Odůvodnění |
+|---|---|---|
+| F1 | ACCEPTED — change required | Implementace používá čas před čekáním, specifikace vyžaduje čas při rozhodnutí. |
+| F2 | ACCEPTED — change required | Implementovaný ukazatel a místní kontrola limitu neodpovídají BR-04 v0.2. |
+| F3 — zamítnutý kandidát | REJECTED — no change required | Souhlas se závěrem hodnotitele. Oba dodané podklady C03, včetně Part A a částí E2–E3/L1–L2/M plného zadání, nestanovují samostatný výstup Quality & Measurement popsaný v C06. Q1–Q3 = N/A je podle dostupných podkladů odůvodněné. |
+| D4 — mezera v testech | ACCEPTED — change required | Chybí trvalé testy přesné hranice 15 minut a hodnoty o 1 ms později; samotná policy se při dodatečné kontrole chovala správně. |
+
+### Actions / justified no-change decisions
+
+Následující opravy jsou plánované; v rámci owner review byla doplněna dokumentace, implementace zůstává v hodnoceném stavu.
+
+- **F1:** zavést předávaný zdroj času, odečítat aktuální čas po potřebných načteních a zámcích před rozhodnutím Confirm/Decide; u Decide zahrnout zámek křečka. Prověřit obdobné použití času v Cancel. Doplnit regrese čekání přes lhůtu s kontrolou odmítnutí, zachovaného stavu a nezměněného outboxu. Upravit kontrakty a sekvence podle finálního řešení.
+- **F2:** započítávat CONFIRMED i PENDING_APPROVAL, rozdělit existující i požadované intervaly podle Europe/Prague a kontrolovat limit v každém dotčeném dni. Doplnit trvalé testy uvedených případů a zachovat serverovou kontrolu limitu.
+- **D4:** doplnit unit případy úspěchu přesně 15 minut před začátkem a odmítnutí o 1 ms později.
+- **F3:** podle předaných zadání nový výstup C04 nedoplňovat. Povinnost samostatného měření kvality není v těchto podkladech doložena; závěr se nevztahuje na případné další nepředané pokyny vyučujícího.
+
+### Remaining evidence gaps
+
+- Při owner review prošlo 10 stávajících unit testů a 4 architektonické kontroly. Byly spuštěny pomocným prostředím Node.js 24.22.1 s odstraněním TypeScript typů a načtením modulů ve VM; nešlo o běh `npm test` přes projektové závislosti.
+- F1 byl reprodukován se simulovanou repository a hodinami. Skutečné čekání na PostgreSQL zámky, rollback databáze ani end-to-end HTTP průchod tímto ověřením testovány nebyly. Zaznamenány byly požadavky na zápisy do náhradní repository.
+- F2 byl ověřen s náhradou DOM a API; ověření v prohlížeči se skutečným backendem a regresní ověření budoucích oprav zbývá provést.
+- Dočasné ověřovací kontroly nejsou součástí trvalé testové sady. Build a databázové integrační sady nebyly při owner review opakovány; výše uvedené výsledky z 22. 10. 2026 jsou historickou evidencí.
+- Podklady C03 použité pro posouzení F3: `SWI_C03_PartA_Tuesday_students_bilingual_v8.html` a `SWI_C03_students_bilingual_v10.html`. Závěr N/A vychází z jejich obsahu a pravidla C06 nehodnotit nezadané požadavky.

@@ -225,9 +225,16 @@ F3 zůstává jen jako záznam zamítnutého podezření. Ověřené chyby proje
 
 **Vyjádření autorů**
 
+Datum reakce: 23. 10. 2026. Reakce se vztahuje k hodnocené baseline `996e9be8880187314e14d294c6fcc11974b50556`. Opravy uvedené níže jsou plánované; tato reakce zaznamenává rozhodnutí vlastníků projektu.
+
 | Finding | ACCEPTED / REJECTED / DEFERRED | Reason/evidence | Action / no-change |
 |---|---|---|---|
-| F1 | |  |  |
-| F2 | |  |
+| F1 | ACCEPTED — change required | REQ-05 a BR-01 požadují systémový čas v okamžiku rozhodnutí. `confirmReservation()` i `decideReservation()` používají čas získaný před čekáním na repository. Kontrola s řízenými hodinami a simulovaným čekáním potvrdila, že při překročení lhůty obě operace nesprávně vrátí CONFIRMED a vyžádají zápis stavu i outboxu. | Předávat zdroj času a odečíst jej po potřebných načteních a zámcích, těsně před rozhodnutím. U Decide zahrnout i čekání na zámek křečka; prověřit stejný vzor u Cancel. Doplnit regresi překročení lhůty při čekání včetně původního stavu a nezměněného outboxu; aktualizovat související kontrakty a sekvence. |
+| F2 | ACCEPTED — change required | BR-04 v0.2 započítává CONFIRMED i PENDING_APPROVAL po dnech Europe/Prague. `calculateUsedMinutesForDay()` čekající žádosti vynechává, používá UTC datum začátku a nerozděluje interval přes půlnoc. Kontrola frontendových funkcí potvrdila nesprávné součty i zablokování platného požadavku přes půlnoc. Nález se týká UI; překročení limitu v databázi jím prokázáno není. | Sjednotit význam výpočtu s backendem: zahrnout oba stavy, rozdělit existující i nový interval podle pražských dnů a kontrolovat každý dotčený den. Doplnit regrese pro čekající žádost, rozdílné UTC/pražské datum a intervaly přes půlnoc. Zachovat autoritativní serverovou kontrolu. |
+| F3 (REJECTED CANDIDATE) | REJECTED — no change required | Souhlasíme se zamítnutím kandidáta. Dodatečně byly zkontrolovány oba podklady `SWI_C03_PartA_Tuesday_students_bilingual_v8.html` a `SWI_C03_students_bilingual_v10.html`. Požadují AS-IS mapování, návrh a ověření architektury; E2–E3 požadují porovnání alternativ a průchod scénářem. Samostatný výstup Quality Concern → Evaluable Criterion → Measurement → Decision v nich stanoven není. | Q1–Q3 ponechat N/A podle dostupných zadání. Chybějící povinnost označujeme jako nedoloženou v předaných podkladech; nevyslovujeme závěr o všech případných dalších pokynech vyučujícího. |
+
+**Doplňující reakce k D4:** Hodnocení PARTLY přijímáme jako mezeru v testech. Ověření policy potvrdilo úspěch přesně při `currentTime = start - 15 min` a odmítnutí o 1 ms později; chyba výpočtu se nepotvrdila. Plánujeme oba případy doplnit do trvalé unit sady.
+
+Požadovaný souhrn vlastníků projektu je v [docs/evidence-and-evolution.md](docs/evidence-and-evolution.md#c06-internal-evidence-assessment).
 
 
