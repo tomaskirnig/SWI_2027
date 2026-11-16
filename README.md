@@ -157,3 +157,33 @@ Confirm používá ConfirmationPolicy a repository.withTransaction. Automatická
 NotificationSender je simulovaný. Confirm a nový Cancel provedou po COMMIT jeden pokus o předání, bez vrácení business změny při selhání. Oznámení správci a výsledky Decide/Expire se pouze uloží jako PENDING. Dispatcher ani automatické opakování nejsou součástí současné verze. Dotaz Availability je veřejný.
 
 Ověření oprav z 22. 10. 2026 a identifikace pracovní verze: [evidence](docs/evidence-and-evolution.md#ověření-oprav-22-10-2026).
+
+## Ověření lhůty Confirm pro C08
+
+Spolužák provede [peer review návrhu CR-08](docs/review-c08.md) a výsledek uloží do [záznamu v kartě](docs/intent-and-change.md#záznam-peer-review).
+
+[Záznam obou scénářů C08](docs/evidence-and-evolution.md#c08--ověření-f1-na-výchozí-verzi) vychází z commitu `c39d54feda198c78c1b330ce3008f2eb6e83ae97`. Pro opakování reprodukce spusťte příkazy z kořene checkoutu tohoto commitu nebo z kořene rozbaleného balíčku C08 (adresář `Kreckomat-C08` s `package.json`). Pokud skript v cílovém checkoutu ještě není, použijte jeho absolutní cestu z checkoutu s dokumentací C08. Pro ověření opravy použijte stejný skript nad výsledným commitem z C09.
+
+Prostředí evidovaného běhu bylo Windows, Node.js 22.14.0, závislosti z `package-lock.json` a PostgreSQL 17.11. Potřebujete nástroje `initdb`, `pg_ctl` a `createdb` na PATH. Následující PowerShell postup vytvoří novou testovací instanci s přístupem pouze přes loopback a bez hesla. Použijte volný port. Skript očekává prázdnou testovací DB `swi_c08_f1` a roli `swi_c08`. Schéma připraví inicializace aplikace.
+
+```powershell
+npm.cmd ci
+if ($LASTEXITCODE -ne 0) { throw "Instalace závislostí selhala." }
+$c08Data = Join-Path $env:TEMP ("swi-c08-" + [guid]::NewGuid().ToString("N"))
+$c08Port = 55015
+initdb -D $c08Data -U swi_c08 --auth=trust --encoding=UTF8 --no-locale
+if ($LASTEXITCODE -ne 0) { throw "Inicializace testovací DB selhala." }
+pg_ctl -D $c08Data -l "$c08Data/server.log" -o "-h 127.0.0.1 -p $c08Port" -w start
+if ($LASTEXITCODE -ne 0) { throw "Start testovací DB selhal." }
+try {
+    createdb -h 127.0.0.1 -p $c08Port -U swi_c08 swi_c08_f1
+    if ($LASTEXITCODE -ne 0) { throw "Vytvoření testovací DB selhalo." }
+    node --import tsx ./scripts/verify-c08-f1.cjs $c08Port
+    $c08Exit = $LASTEXITCODE
+} finally {
+    pg_ctl -D $c08Data -m fast -w stop
+}
+$c08Exit
+```
+
+Výstup uvádí pro každý případ HTTP odpověď, skutečné čekání v PostgreSQL a stav rezervace a outboxu po dokončení. Návratový kód čtěte spolu s vypsanými `caseId` a `verdict`. Kód `0` s dvěma výsledky `PASS` znamená dva průchody. Kód `1` s výsledkem `FAIL` znamená nesoulad. Na výchozí verzi očekávejte `TC-C08-01 PASS` a `TC-C08-02 FAIL`, protože druhý případ reprodukuje F1. Kód `2` nebo ukončení před vypsáním některého verdiktu je překážka při provedení. Do evidence uveďte příčinu a případ bez verdiktu označte `BLOCKED`. Každé opakování použije novou prázdnou testovací DB.
