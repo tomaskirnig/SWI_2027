@@ -447,3 +447,33 @@ Podrobnosti a zdroje k těmto akcím jsou v [posouzení C06](#c06-internal-evide
 **Verdikt** `FAIL`. F1 je pro cestu HTTP Confirm potvrzený na skutečném zámku PostgreSQL. Pozdní požadavek porušil REQ-05 a změnil trvalý stav i outbox. Po schválení změny bude tento případ akceptační regresí AC-02.
 
 **Doklad a rozsah.** Oddělený dotaz po HTTP odpovědi použil `SELECT r.status, count(o.id)::int AS outbox_count FROM reservations r LEFT JOIN notifications_outbox o ON o.reservation_id = r.id WHERE r.id = $1 GROUP BY r.id`. Skript vrátil kód `1` v důsledku `TC-C08-02 FAIL`. Po běhu byla testovací instance ukončena. Pro opakování nastavte novou prázdnou testovací DB podle README. Spuštěné případy pokrývají Confirm s čekáním na zámek řádku rezervace. Přesná inkluzivní hranice, čekání na zámek křečka, Decide a Cancel vyžadují následující ověření. Účinnost budoucí opravy a skutečné zbytkové riziko R-01 jsou `NOT VERIFIED`.
+
+## C09 — Integrace a kandidát na vydání
+
+**Změna a identita kódu.** Tým po review Tomáše Kirniga přijal variantu A v [CR-08](intent-and-change.md#c08--cr-08-rozhodný-čas-při-změně-stavu-rezervace). Výchozí běh C08 je na `c39d54feda198c78c1b330ce3008f2eb6e83ae97`. Implementace vychází z posouzené karty na větvi `dodelani_C07-C10` na `ec5678102256fa96e5d10836c1c265a0e9d699f5`. Obě výchozí verze mají stejný kód operací a závislosti. **After** `58d97bdf53482824c7bfeaa1498884fd74c1bce1`.
+
+**Implementace.** [HTTP API](../src/app.ts) předá volitelný časový override. Běžný Confirm odečte hodiny ve [službě](../src/service.ts) po zámcích a po načtení podkladů. Decide odečte čas po zámku rezervace i křečka. Cancel odečte čas po zámku rezervace a po kontrole idempotentní větve. [Kontrakt a sekvence](architecture-and-decisions.md#část-h1-návrhová-sekvence-confirm-reservation) popisují stejný průchod. Oprávnění, stavy, rollback, schéma a stávající volitelná testovací hlavička mají dosavadní kontrakt. F2 je mimo rozsah CR-08.
+
+### Ověření akceptačních podmínek a regresí
+
+Běh 16. 11. 2026 proběhl na Windows v odděleném adresáři s kódem výchozího commitu a přesnou sadou změn z commitu **After**. Použito Node.js 22.14.0, npm 10.9.2 a nová PostgreSQL 17.11. V adresáři nebyly lokální závislosti ani `.env`. Spuštěno `npm ci`, `npm run check:c09 -- 55386` a smoke sestavené aplikace. Kontrola skončila s kódem `0`. [Úplný lokální výstup](verification-c09.txt) · [Reprodukce z čistého checkoutu](../README.md#c09-ověření-z-čistého-checkoutu).
+
+| Test a příkaz | Očekávání | Skutečnost |
+|---|---|---|
+| TC-C08-01 · [původní skript](../scripts/verify-c08-f1.cjs) v `check:c09` | Zámek uvolněný před lhůtou → `200`, `CONFIRMED`, jeden nový outbox záznam. | **PASS.** Uvolnění `11:26:53.148Z` před hranicí `11:27:12.988Z`. HTTP `200`, databáze `CONFIRMED` a 1 záznam. |
+| TC-C08-02 · stejný skript v `check:c09` | Požadavek čeká před lhůtou, zámek se uvolní po ní → `400` s důvodem předstihu, stav `DRAFT`, outbox beze změny. | **PASS.** PostgreSQL prokázala čekání v `11:26:53.195Z`. Hranice `11:27:01.185Z`, uvolnění `11:27:01.303Z`. HTTP `400`, v DB zůstal `DRAFT` s 0 záznamy. Původní výsledek C08 byl `FAIL`. |
+| AC-01/02 a schvalovací větev AC-05 · [nové scénáře](../src/decision-deadline.test.ts) | Confirm na -15 min uspěje, o 1 ms později vrátí `400` bez zápisu. Schvalovací větev uloží `PENDING_APPROVAL` a oznámení pro oba adresáty. | **PASS.** Stav a nové adresáty po úspěchu ověřil nový DB dotaz. Po odmítnutí se stav a celý outbox rovnaly počátečnímu snímku. |
+| AC-03 · nové scénáře | Approve i Reject uspějí 1 ms před `start - 1h`. Na hranici, za hranicí i po skutečném čekání na zámek křečka vrátí `400`, zachovají `PENDING_APPROVAL` a původní outbox. | **PASS** pro obě rozhodnutí, včetně kontroly původních outbox záznamů při všech odmítnutích. |
+| AC-04 · nové scénáře | Nový Cancel ve třech povolených stavech na hranici uspěje a přidá oznámení vlastníkovi. Pozdní pokus nebo čekání za hranici vrátí `400` bez změny. Opakovaný Cancel po lhůtě uspěje idempotentně. | **PASS.** Stavy, adresáti a počáteční outbox ověřeny nezávislým DB dotazem. |
+| Původní regrese · `npm run verify` v `check:c09` | Zachovat kolize, limit, oprávnění, souběh, atomický zápis a expiraci. | **PASS.** 30 původních scénářů a 7 regresí. |
+| Build, `npm test` a smoke | Sestavení, unit a architektonické kontroly a start s PostgreSQL. | **PASS.** 10 unit testů, 4 architektonické kontroly. `node dist/index.js` odpověděl na `GET /api` a `GET /api/hamsters` vrátil katalog z DB. |
+
+Integrační hranice je HTTP → aplikační transakce → PostgreSQL. Testy zámků potvrzují čekání přes `pg_stat_activity` a `pg_blocking_pids()`. Testy Decide a Cancel při zámku spouštějí samotnou HTTP aplikaci, takže časovač OP-06 nemění ověřovaný stav.
+
+### CI a vydání
+
+- **Automatizace.** [Workflow C09](../.github/workflows/c09.yml) používá čistý checkout, `npm ci`, Node.js 22.14.0 a samostatnou službu PostgreSQL 17.11. Na push a pull request spouští stejný `check:c09`. Lokální výsledek je ve výše uvedeném logu. Stav vzdáleného běhu k větvi je v [GitHub Actions](https://github.com/tomaskirnig/SWI_2027/actions/workflows/c09.yml?query=branch%3Adodelani_C07-C10).
+- **Kandidát RC1.** Artefakt `Kreckomat-C09-RC1.zip` má SHA-256 `89b1000858421ae4c053326755882ccd26bfcd3a071053f857c4a710eb187951`. Obsahuje sestavený runtime v `dist/`, statický frontend a oba npm manifesty. `dist/index.js` z ověřeného sestavení má SHA-256 `2a1b8a31362f41d7c06f4b57580785f75700acefeb58c265220352543959a327`. Lockfile má SHA-256 `296f77cb77325c2138e4f2cba006035a6b17381c1482e5a830eacf570ac44917`.
+- **Schéma a konfigurace.** Schéma z [repository](../src/repository.ts) se inicializuje při startu bez nové migrace. Testovací konfigurace je lokální `127.0.0.1`, role `swi_c08`, DB `swi_c08_f1` a `DB_SSL=false` v izolované instanci. Návrat aplikace na původní kód obnoví původní chybu časového rozhodnutí a automaticky nevrátí už uložené rezervace ani oznámení. Případnou obnovu dat je potřeba posoudit zvlášť.
+- **Nezávislý code review a čistý checkout.** `NOT RUN`. Druhý člen týmu má zrevidovat diff commitu After proti AC-01 až AC-05 a zopakovat postup z README z čistého checkoutu na stejném commitu. Do tohoto záznamu doplní jméno, datum, prověřený předpoklad, vypořádání připomínek, prostředí, příkazy, výsledky a případný blocker.
+- **Pracovní stav vydání `HOLD`.** Vlastník změny Martin Kalus. Funkční ověření a lokální smoke prošly. K rozhodnutí týmu o vydání zbývá nezávislé review a reprodukce. Instalace také ohlásila 6 bezpečnostních upozornění ve stávajících závislostech (3 střední, 2 vysoká a 1 kritické). Před rozhodnutím o nasazení je potřeba posoudit jejich dopad na runtime. Technický důkaz k riziku R-01 je v tabulce výše.
