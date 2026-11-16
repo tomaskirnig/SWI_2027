@@ -143,3 +143,12 @@ npm notice To update run: npm install -g npm@12.2.2
 npm notice
 check:c09 exit 0
 [PASS] Smoke dist/index.js: GET /api status=ok and GET /api/hamsters returns DB catalog
+
+GitHub Actions C09 verification, run 43858548614
+Commit: 72bcb1727df09053148f2d8c2ec1f6840cda5336
+Status: completed, conclusion: success
+https://github.com/tomaskirnig/SWI_2027/actions/runs/43858548614
+
+npm audit --omit=dev --json
+Exit code: 1
+Runtime counts: 1 moderate, 1 high, 1 critical
