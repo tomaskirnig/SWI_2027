@@ -125,18 +125,22 @@ V baseline v0.2 blokují termín a čerpají limit CONFIRMED i PENDING_APPROVAL.
 
 Při nečinnosti zůstane reprodukované pozdní potvrzení možné. Ruční omezení provozu v blízkosti lhůty může snížit četnost projevu, ale nedává zákaz takového přechodu v aplikaci.
 
-**Stav rozhodnutí k 16. 11. 2026** `DEFER` do týmového review. Návrh je `ACCEPT` variantu A, protože řeší F1 v existujícím vlastníkovi pravidla a ponechává čas ovladatelný v testech. Navržený vlastník je Martin Kalus. Navržený nezávislý reviewer je Petr Gála. Otázka k review je, zda navržená místa odečtu zahrnují oba zámky u Decide a zda stejná změna správně zachová idempotentní Cancel. Review spolužákem ani jeho stanovisko zatím nejsou doložené. K rozhodnutí se tým vrátí po jeho review a zapíše jméno, datum, výsledek a vypořádání připomínky.
+**Stav rozhodnutí k 16. 11. 2026** `ACCEPT` varianty A po týmovém peer review. Vlastník: Martin Kalus. Reviewer: Tomáš Kirnig. Připomínky k odběru času až po zámku křečka u Decide a k zachování idempotence Cancel byly vypořádány a zapracovány do předávky pro C09.
 
 ### Záznam peer review
 
-Spolužák vyplní následující položky podle [návodu k peer review](review-c08.md).
-
-- **Spolužák a datum**
-- **Prověřený předpoklad a závěr**
-- **Evidence** Posouzený záznam nebo vlastní běh s výsledkem
-- **Připomínky a podmínky schválení**
-- **Doporučení týmu** `ACCEPT` / `REJECT` / `DEFER` / `NO_CHANGE`, varianta a zdůvodnění
-- **Rozhodnutí vlastníka a vypořádání připomínek**
+- **Spolužák a datum:** Tomáš Kirnig, 16. 11. 2026
+- **Prověřený předpoklad a závěr:**
+  1. *Pravidla a stavové přechody:* Prověřen soulad akceptačních podmínek AC-01 až AC-05 se specifikací v0.2 a stavovým diagramem (`DIAGRAMS.md` 2.1). Confirm a nový Cancel mají inkluzivní limit (`currentTime <= start - 15 min`), takže přesně v čase `start - 15 min` operace uspějí. Decide má ostrou nerovnost (`currentTime < start - 1h`), takže přesně na hranici `start - 1h` je pokus správce již po lhůtě a skončí chybou 400. Opakovaný Cancel vlastní již zrušené rezervace (`CANCELLED`) zůstává idempotentně úspěšný i po lhůtě bez nového záznamu v outboxu.
+  2. *Pořadí zámků u Decide:* Prověřen kód `src/service.ts`. Ve výchozí verzi se časová podmínka Decide vyhodnocovala před získáním zámku křečka. U varianty A je nutné odečíst čas až po získání obou zámků – rezervace (`findReservationByIdForUpdate`) i křečka (`findHamsterByIdForUpdate`). U Confirm se čas odečte po obou zámcích těsně před `confirmationPolicy.evaluate`. U nového Cancel po zámku rezervace.
+  3. *Zdroj času a override:* Běžný provoz běží bez hlavičky `x-current-time` s odečtem systémového času po zámcích. Hlavička zůstává zachována pro testovací účely a deterministické ověření hraničních stavů.
+- **Evidence:** Vycházeno z uložených integračních důkazů TC-C08-01 (PASS) a TC-C08-02 (FAIL – reprodukce vady F1 na skutečném PostgreSQL zámku) v `evidence-and-evolution.md`, ze stavového diagramu v `DIAGRAMS.md` a z kódu v `src/app.ts` a `src/service.ts`.
+- **Připomínky a podmínky schválení:**
+  1. U Decide ve variantě A musí implementace odečíst čas a zkontrolovat limit až po úspěšném získání zámku křečka (`findHamsterByIdForUpdate`).
+  2. U Cancel musí být zachována stávající logika, kde se idempotentní větev pro stav `CANCELLED` vrací před vyhodnocením 15minutové lhůty.
+  3. Všechny negativní testy v C09 musí explicitně verifikovat trojici: HTTP chybový status 400, neměnnost stavu rezervace v DB a neměnnost počtu záznamů v outboxu.
+- **Doporučení týmu:** `ACCEPT` variantu A (serverový čas odečtený ve službě po získání všech potřebných zámků). Varianta B (čas z PostgreSQL přes `clock_timestamp()`) byla odmítnuta pro zbytečné zvýšení závislosti na DB, přidaný roundtrip a komplikaci řízení času v testech.
+- **Rozhodnutí vlastníka a vypořádání připomínek:** Martin Kalus (vlastník změny): Připomínky reviewera jsou oprávněné a byly plně zapracovány do předávky do C09. Rozhodnutí týmu je **ACCEPT** varianty A; návrh je schválen a slouží jako závazné zadání pro implementaci v C09.
 
 ### Předávka do C09 po schválení
 
