@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="cs"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>SWI C09 — Complete CZ / EN assignment</title>
+<style>
+:root{--ink:#152840;--muted:#4c5e6e;--acc:#206994;--light:#e6f1f6;--paper:#ffffff;--stroke:#c8d5dc;--bg:#f1f4f6}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.7 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{background:#102940;color:white;padding:1.4rem max(1.5rem,calc((100vw - 1120px)/2)) 1.1rem}
+header small{color:#acd6e7;letter-spacing:.11em;font-size:.75rem;font-weight:700}header h1{font-size:1.9rem;line-height:1.25;margin:.4rem 0}
+header p{margin:.2rem 0;color:#dbeaf1}nav{display:flex;gap:.65rem;align-items:center;flex-wrap:wrap;max-width:1120px;margin:0 auto;padding:1rem .5rem}
+nav button{border:1px solid #b6c9d4;border-radius:8px;background:#fff;color:#1d4762;padding:.55rem 1rem;font:inherit;font-weight:700;cursor:pointer}
+nav button[aria-pressed=true]{background:#156c93;color:white;border-color:#156c93}
+nav .hint{color:#516c7d;font-size:.9rem;margin-left:auto}
+main{max-width:1120px;margin:0 auto 3rem;padding:0 .5rem}.language{background:white;border:1px solid var(--stroke);border-radius:14px;padding:1.25rem 2rem;box-shadow:0 3px 12px #2336450b}
+.language>h2:first-child{margin-top:0;border:0}.language h1{font-size:1.65rem;line-height:1.28;margin:0 0 1.2rem}
+.language h2{font-size:1.42rem;margin-top:2.4rem;line-height:1.3;border-top:1px solid #d2e1e7;padding-top:1.15rem}
+.language h3{font-size:1.13rem;margin-top:1.6rem}.language h4{font-size:1.04rem;margin:1.35rem 0 .35rem;color:#174e70}.language h4+p{margin-top:.35rem}.language p{margin:.8rem 0}.language blockquote{border-left:5px solid #2b8aaf;background:#eaf6f9;padding:.6rem 1.1rem;margin:1.1rem 0;font-weight:450}
+.language blockquote p{margin:.35rem 0}.language table{border-collapse:collapse;min-width:720px;width:100%;font-size:.91rem;line-height:1.48}
+.language th,.language td{border:1px solid #c4d6dc;padding:.55rem .62rem;vertical-align:top;text-align:left}
+.language th{background:#eaf1f5}.language tr:nth-child(even) td{background:#f6f9fa}
+.language pre{background:#102c42;color:#e9f5fb;border-radius:9px;padding:1.05rem 1.1rem;overflow:auto;line-height:1.45;font-size:.88rem}
+.language pre code{color:inherit}.language :not(pre)>code{background:#eaf2f5;color:#155370;border-radius:3px;padding:0 .18rem}
+.language ul,.language ol{padding-left:1.65rem}.language li{margin:.33rem 0}.table-wrap{width:100%;overflow:auto;margin:1.1rem 0}
+.copybar{display:flex;justify-content:flex-end;margin-bottom:-.2rem}.copybar button{padding:.35rem .7rem;font-weight:600;border:1px solid #adcad8;background:#fff;color:#175373;border-radius:7px;cursor:pointer}
+footer{max-width:1120px;margin:2rem auto;color:#536777;padding:0 1rem;font-size:.9rem}
+@media(max-width:700px){body{font-size:15px}.language{padding:1.15rem}.language h1{font-size:1.4rem}.language h2{font-size:1.2rem}header{padding:1rem 1.5rem}header h1{font-size:1.4rem}nav .hint{margin:0}}
+@media print{body{background:#fff}header{background:#fff;color:#152840;padding:1rem}nav{display:none}.language{box-shadow:none;border:0;padding:0}.language[hidden]{display:block!important;break-before:page}}
+</style></head><body>
+<header><small>VŠB FEI · SOFTWARE ENGINEERING · R17</small><h1>SWI C09 — CZECH / ENGLISH</h1><p>Detailed engineering procedure · Worked example · Reusable templates · Evidence</p></header>
+<nav aria-label="Choose assignment language"><button aria-pressed="true" id="lang-cs" type="button">Česky</button><button aria-pressed="false" id="lang-en" type="button">English</button></nav>
+<main><section class="language" id="section-cs" lang="cs"><h2>Česky</h2><h1>C09 — Implementace změny, integrace, CI a reprodukovatelný release</h1>
+
+<h2>1. Od schválené změny k ověřené verzi</h2>
+<p>V C08 jste stanovili přesnou <em>before</em> baseline, přijatý změnový požadavek, analýzu dopadu, varianty a review rozhodnutí. <strong>C09 uzavírá cestu od rozhodnutí k ověřené a identifikované verzi produktu.</strong> Pokud bylo zvoleno <code>ACCEPT</code>, implementujte nejmenší schválenou změnu, zrevidujte ji a proveďte nové i regresní testy. Pokud jste na základě skutečných důkazů rozhodli <code>REJECT/NO_CHANGE</code>, nevymýšlejte umělý commit: reprodukujte nezměněnou přijatou baseline, doložte zachovaná pravidla a přezkoumanou alternativní reakci. Pouhé <code>DEFER</code> bez dalšího rozhodnutí nebo chybějících podkladů nestačí.</p>
+<p><strong>Technický postup:</strong> accepted CR → branch/patch → code review → build → unit + relevant real integration test → CI feedback → clean checkout → artefakt, konfigurace a schéma → release candidate decision. <code>CI green</code> znamená jen to, že prošly provedené kontroly; není synonymem verifikace všeho ani povolením nasazení.</p>
+<p><strong>Vlastní změna týmu:</strong> použijte právě ten Change Request a zvolenou variantu, které jste skutečně posoudili a rozhodli v C08. Následující CR-08 je pouze vypracovaný příklad postupu, nikoli povinná funkcionalita vašeho systému.</p>
+<h2>2. Výsledek a realistický rozsah</h2>
+<p>Výstupem je <em>jeden</em> jasně identifikovaný release candidate či dokumentované <code>HOLD</code>, ne cloudová infrastruktura. Použijte aktuální jazyk a tooling, které máte. Požadujeme: identifikovaný before/after commit/tag (i stejné při NO_CHANGE), spustitelné build/test instrukce, výsledek review, nové a regresní testy navržené v C08, nyní skutečně provedené, <strong>nejméně jednu skutečnou integrační hranici</strong> a čistou reprodukci jiným členem. CI job při push/PR použijte tam, kde je dostupný; pokud není, doložte automatizovaný script a důvod omezení. Není předepsán Kubernetes, Docker, GitHub, GitLab ani cloud.</p>
+<p><strong>Rozpracované kroky dokončete do příštího cvičení.</strong> Doložte skutečný výsledek; neprovedené testy označte <code>NOT RUN</code>, skutečnou překážku <code>BLOCKED</code> s příčinou a dalším proveditelným krokem.</p>
+<h2>3. Postup: krok po kroku a proč</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Krok</th>
+<th>Proveďte</th>
+<th>Proč</th>
+<th>Co uložit do existujícího projektu</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0. Otevřít C08</td>
+<td>Vyberte reviewed CR, rozhodnutí, impact a jeho test basis</td>
+<td>Neimplementovat něco, co nikdo nepřijal</td>
+<td>CR/decision odkaz + <code>before</code> commit</td>
+</tr>
+<tr>
+<td>1. Definovat delta</td>
+<td>Vyjmenujte změněné chování, jednotky, data, config a N/A oblasti</td>
+<td>Udržet rozsah, odhalit skryté důsledky</td>
+<td>Malý change scope + test map</td>
+</tr>
+<tr>
+<td>2. Implementovat/reprodukovat</td>
+<td>ACCEPT: změna s kontrolovanou verzí; NO_CHANGE: zachovaná baseline a ověření</td>
+<td>Rozhodnutí musí souhlasit s realitou</td>
+<td>PR/commit nebo důkaz nezměněné identity</td>
+</tr>
+<tr>
+<td>3. Review a testy</td>
+<td>Peer zkontroluje kontrakt, regresi, chybové cesty a diff</td>
+<td>Testy nejsou náhradou kontroly smyslu změny</td>
+<td>Review disposition a odkazy</td>
+</tr>
+<tr>
+<td>4. Automatizovat</td>
+<td>Jeden příkaz pro build, testy a integrační kontrolu</td>
+<td>Provozovatelná opakovatelnost</td>
+<td>Script/CI job + exit code + log</td>
+</tr>
+<tr>
+<td>5. Reprodukovat nezávisle</td>
+<td>Jiný člen provede čistý checkout a start/test bez ručních záplat</td>
+<td>Odhalí skryté lokální nastavení</td>
+<td>Přesné příkazy, prostředí, skutečný výsledek</td>
+</tr>
+<tr>
+<td>6. Identifikovat release</td>
+<td>Uveďte artefakt, dependency lock, schéma, konfiguraci, migrace</td>
+<td>Git commit sám není identita produktu</td>
+<td>RC manifest, known limitations</td>
+</tr>
+<tr>
+<td>7. Rozhodnout</td>
+<td>READY / CONDITIONAL / HOLD podle skutečného důkazu</td>
+<td>Rozdíly mezi build, verifikací a akceptací</td>
+<td>Owner, důvody, chybějící důkazy</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Podrobné vysvětlení jednotlivých kroků</h3>
+<h4>Krok 0 — Převzít rozhodnutí z C08</h4>
+<p>Otevřete svou Change Card z C08. Najděte <strong>přesný požadavek a jeho acceptance criteria</strong>, zvolenou variantu, zdůvodnění rozhodnutí a commit, na kterém analýza vznikla. Zkontrolujte, že rozhodnutí skutečně znamená <code>ACCEPT</code>. Pokud je podmíněné, vyjasněte podmínky před úpravou kódu. Pokud je <code>NO_CHANGE/REJECT</code>, pokračujete ověřením nezměněné baseline a svého zdůvodnění, nikoli umělou změnou.</p>
+<p><strong>Příklad:</strong> C08 stanovilo, že po vypršení potvrzovací lhůty nelze rezervaci potvrdit. Záznam musí říci, zda se při přesně <code>30:00</code> ještě potvrzuje, nebo již zamítá; bez toho nelze napsat správný test. <strong>Hotovo, když</strong> lze ukázat Change Card, rozhodnutí a původní commit, bez dalšího vymýšlení požadavku.</p>
+<h4>Krok 1 — Vymezit nejmenší skutečnou změnu</h4>
+<p>Z Impact Matrix určete, <strong>které konkrétní části stávající aplikace</strong> se mění: vstupní API, aplikační pravidlo, stavový přechod, databázový zápis, konfigurace nebo test. Ke každému dopadu napište, co se mění a co má zůstat stejné. Položku <code>N/A</code> používejte jen se stručným zdůvodněním. Nejde o tvorbu nové architektury; jde o výběr rozsahu a regresních rizik.</p>
+<p><strong>Příklad:</strong> Změna validace času v <code>Approve</code> může zasáhnout serverové pravidlo, časový zdroj a testy, ale nemusí vyžadovat nové tabulky. <strong>Hotovo, když</strong> je zřejmé, na co má implementace sáhnout a které dřívější chování se nesmí změnit.</p>
+<h4>Krok 2 — Implementovat přijaté rozhodnutí</h4>
+<p>Vycházejte z identifikované baseline. Pro <code>ACCEPT</code> vytvořte kontrolovatelnou úpravu kódu, případných migrací a souvisejících specifikací; rozlište ji jednoznačným commitem nebo PR. Změnu udržte v mezích schváleného řešení. Pokud při implementaci narazíte na nový zásadní dopad, vraťte ho do rozhodnutí, místo abyste potichu rozšířili zadání. Pro doložené <code>NO_CHANGE</code> žádný nový funkční commit nutný není.</p>
+<p><strong>Příklad:</strong> Kontrola expirace se provádí na serveru před potvrzujícím databázovým přechodem; nestačí skrýt tlačítko ve webovém rozhraní. <strong>Hotovo, když</strong> lze ukázat konkrétní diff a commit a vysvětlit, jak odpovídají schváleným AC.</p>
+<h4>Krok 3 — Zrevidovat změnu a skutečně provést testy</h4>
+<p>Jiný člen porovná diff s přijatými AC: zkontroluje normální cestu, hranici, zamítnutí, data a možné souběhy. Potom spusťte <strong>nové testy změny i relevantní regresní testy z C08</strong>. U každého evidujte předem určené <code>expected</code>, skutečné <code>actual</code>, výsledek a příkaz/commit. Alespoň jedna zkouška musí projít <strong>skutečnou integrační hranicí</strong> (například aplikace–testovací DB), nejen mockem. Pro stavový požadavek ověřte také perzistovaný stav samostatným čtením.</p>
+<p><strong>Příklad:</strong> Při <code>29:59</code> se očekává povolené potvrzení a v nové DB transakci stav <code>CONFIRMED</code>; při ilustrační hranici <code>30:00</code> se očekává zamítnutí a DB nesmí obsahovat chybně potvrzenou rezervaci. <strong>Hotovo, když</strong> existují skutečné, dohledatelné výsledky, nikoli jen napsané test cases.</p>
+<h4>Krok 4 — Automatizovat sestavení a kontroly</h4>
+<p>Zapište opakovatelný postup, který spustí instalaci či kontrolu závislostí, build a relevantní automatizované testy. Ideálně ho připojte k existujícímu CI workflow při push/PR; pokud tým CI nemá, připravte jeden spustitelný lokální script a výslovně uveďte omezení. Zaznamenejte <strong>commit, prostředí, konkrétní příkaz, exit code a odkaz na log</strong>. Ujistěte se, že se integrační test opravdu spouští v tomto procesu, nikoli jen jednotlivě na autorově notebooku.</p>
+<p><strong>Příklad:</strong> Pro Maven může jít o <code>./mvnw clean verify</code>, ale pouze pokud projekt skutečně obsahuje potřebné integrační testy a konfiguraci. Samotný zelený status neprokazuje netestované cesty. <strong>Hotovo, když</strong> jiný člen umí spustit stejnou kontrolu a je vidět, co se provedlo.</p>
+<h4>Krok 5 — Ověřit reprodukovatelnost na čistém checkoutu</h4>
+<p>Druhý člen týmu v <strong>novém adresáři</strong> získá přesný commit, postupuje jen podle <code>README</code>, připraví deklarované prostředí a testovací data, spustí build, testy a start/smoke check. Autor nesmí problém opravit nezdokumentovanou lokální konfigurací. Zapište operační systém/runtime, potřebné proměnné <strong>bez tajných hodnot</strong>, příkazy, skutečný výsledek a případný blocker.</p>
+<p><strong>Příklad:</strong> Pokud aplikace funguje jen díky lokálnímu <code>.env</code>, který není popsán, clean checkout <strong>neprošel</strong>. Doplnění dokumentovaného příkladu konfigurace a nový pokus jsou součástí nápravy. <strong>Hotovo, když</strong> lze sestavení a kontrolu zopakovat, nebo je přesně doloženo, proč zatím ne.</p>
+<h4>Krok 6 — Určit, co přesně je kandidátem na vydání</h4>
+<p>Pojmenujte výsledný <strong>commit/tag a sestavený artefakt</strong> (soubor, verze nebo hash), runtime, uzamčené závislosti, databázové schéma/migrace a netajnou konfiguraci. Zaznamenejte, které testy skutečně běžely a jaká omezení zůstávají. Napište, co by obnášelo vrácení aplikace; <strong>rollback kódu sám nevrátí změněná databázová data</strong>. Není nutné nasazení do cloudu ani složitá release platforma.</p>
+<p><strong>Příklad:</strong> <code>commit 9d25c41</code>, JAR či jiný artefakt vytvořený z tohoto commitu, deklarovaná DB migrace a testovací log. <strong>Hotovo, když</strong> by další člověk poznal, jakou konkrétní verzi a za jakých podmínek má zkoušet.</p>
+<h4>Krok 7 — Rozhodnout podle důkazů, ne podle dojmu</h4>
+<p>Porovnejte skutečné výsledky s přijatými kritérii a s původními invariants. Rozhodnutí <code>READY</code> je opřené o dokončené relevantní kontroly, <code>CONDITIONAL</code> přesně popisuje omezení a podmínky, <code>HOLD</code> znamená konkrétní otevřené selhání či nedostatek důkazů. Zapište, kdo za rozhodnutí v týmu odpovídá, proč ho učinil a co by bylo potřeba k jeho změně. <strong>Zelená CI automaticky nedává souhlas k nasazení.</strong></p>
+<p><strong>Příklad:</strong> Nové AC i regrese prošly, ale clean checkout druhého člena selhal kvůli nezdokumentované DB konfiguraci → <code>HOLD</code>, oprava README a opakování reprodukce. <strong>Hotovo, když</strong> lze rozhodnutí obhájit konkrétními výsledky a odkazy.</p>
+<h2>4. Vyplněný příklad: CR-08 expiry kontrola</h2>
+<p>Příklad používá předchozí C08 změnu: po 30 minutách se čekající žádost nemůže potvrdit; tým schválil <strong>lazy expiry při pokusu o Approve</strong>. Nejprve doplňte skutečné acceptance podmínky k výslednému návrhu, např. <code>AC-01</code> schválení v 29:59 při splněných podmínkách, <code>AC-02</code> pozdní zamítnutí v 30:01, <code>AC-03</code> přesnou hranici 30:00 podle explicitně dohodnuté inkluzivity (v tomto <strong>ilustračním</strong> příkladu se přesně 30:00 již zamítá; věk ≥ 30:00), <code>AC-04</code> regresi BR-02 (žádný překryv dvou CONFIRMED). Nepřijímejte očekávání podle toho, co nový kód zrovna dělá.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Důkaz</th>
+<th>Jak má skutečně vypadat</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Before/after</td>
+<td><code>before=3f8a2b1; after=9d25c41</code>, schéma a config u obou</td>
+</tr>
+<tr>
+<td>Code review</td>
+<td>Reviewer ověřil serverový čas, autorizaci, konflikt po delay a persistenční zápis</td>
+</tr>
+<tr>
+<td>Nový test</td>
+<td><code>TC-CR08-03</code>: izolovaná data, vytvořit PENDING, posunout kontrolovaný čas, volat Approve, přečíst committed stav</td>
+</tr>
+<tr>
+<td>Negativní hrana</td>
+<td>30:01 → B2 není CONFIRMED a zaznamená se odpovídající stav/odmítnutí</td>
+</tr>
+<tr>
+<td>Regrese</td>
+<td>C08 <code>TC-C08-01/02</code> s původními i novými daty, committed-state oracle</td>
+</tr>
+<tr>
+<td>CI</td>
+<td>Např. <code>./mvnw -q verify</code> + skutečný DB integrační job; nástroj podle stacku</td>
+</tr>
+<tr>
+<td>Clean checkout</td>
+<td>Druhý člen spustil bez autorových lokálních souborů; příkazy v README</td>
+</tr>
+<tr>
+<td>Limit</td>
+<td><code>worker</code> se netestoval, protože neexistuje; rollback změn stavu na starých datech neověřen – explicitní omezení</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Konkrétní integrační test s kroky</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>#</th><th>Akce</th><th>Expected</th><th>Actual/evidence</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Inicializovat izolovanou DB: B2 PENDING, bez konfliktu; uložit vytvoření a commit</td><td>B2 PENDING a známý počáteční čas; referenční stav definovaný před testem</td><td><em>doplnit po skutečném běhu</em></td></tr>
+<tr><td>2</td><td>Nastavit věk 29:59 a vyvolat skutečné Approve(B2)</td><td>AC-01: povolená operace pro B2; očekávaná odpověď dle přijaté specifikace</td><td><em>doplnit po skutečném běhu</em></td></tr>
+<tr><td>3</td><td>PŘED jakýmkoli resetem samostatnou DB transakcí načíst B2 a relevantní CONFIRMED intervaly</td><td>B2 právě CONFIRMED, stejné ID a interval; žádný neplatný překryv dle BR-02</td><td><em>doplnit po skutečném běhu</em></td></tr>
+<tr><td>4</td><td>Reset do stejného PENDING stavu; nastavit přesně 30:00; Approve(B2) a nové nezávislé DB čtení</td><td>AC-03 ilustrace: zamítnuto při věku ≥ 30:00; B2 není CONFIRMED; žádný chybný zápis</td><td><em>doplnit po skutečném běhu</em></td></tr>
+<tr><td>5</td><td>Znovu reset do výchozího PENDING; nastavit 30:01; Approve(B2)</td><td>AC-02: zamítnuto, bez potvrzení B2</td><td><em>doplnit po skutečném běhu</em></td></tr>
+<tr><td>6</td><td>Po 30:01 číst committed B2 a konfliktní intervaly v nové transakci</td><td>B2 není CONFIRMED; invariant BR-02 stále platí</td><td><em>doplnit po skutečném běhu</em></td></tr>
+<tr><td>7</td><td>Spustit existující C08 TC-C08-01/02 a regrese dotčené změnou</td><td>Přijaté staré chování zachováno; skutečné výsledky až po běhu</td><td><em>doplnit po skutečném běhu</em></td></tr>
+</tbody></table></div>
+<p>Při jiném schváleném AC-03 je očekávání ve 30:00 jiné: zapište přesnou inkluzivitu z přijaté specifikace <strong>před</strong> spuštěním, nikdy ji neodvozujte ze stávajícího kódu. U každého nového běhu uvádějte commit, fixture, časový zdroj, DB dotaz a actual zvlášť; tabulka je zadání testu, ne záznam o provedeném PASS.</p>
+<p>Pozor: pouhý <code>assert HTTP != 200</code> neprokazuje korektní uložený stav. Unit test s mock DB sám nenahrazuje integrační důkaz skutečné transakce. Správně aktivní databázové exclusion omezení může chránit více zapisujících cest; nevyhlašujte přímé SQL za automatický bypass. Náhradní kód/nástroj/CI bez skutečného běhu je <code>PLANNED</code> nebo <code>BLOCKED</code>, ne <code>PASS</code>.</p>
+<h2>5. CI, závislosti a reprodukovatelný checkout</h2>
+<p>V <code>README</code> uveďte přesné příkazy pro závislosti, schéma, test DB, build/test/run a smoke. Typové ukázky: <code>./mvnw clean verify</code> nebo <code>npm ci &amp;&amp; npm test</code> nebo <code>pytest</code>; nejde o požadované technologie. CI workflow minimálně identifikuje commit/PR, prostředí, kroky, exit status a dostupný log. Integrační test musí používat skutečnou relevantní hranici (např. testovací DB), nikoli jen in-memory mock. Tajné klíče nejsou součástí evidence; jejich konfiguraci popisujte jako požadované proměnné.</p>
+<p><strong>Clean checkout pokus:</strong> druhý člen v novém adresáři získá přesný commit/tag, podle README nastaví neautentizační konfiguraci, připraví DB, spustí test a aplikaci. Zaznamenejte čas, prostředí, příkaz, očekávání a actual. Selže-li to, výsledek je <code>FAIL/BLOCKED</code> s důvodem a opravou; není přípustné tvrdit „reprodukovatelné“, když musel autor nezdokumentovaně doplňovat soubory.</p>
+<p><strong>Release identity:</strong> kód + lockfile/verze závislostí + runtime + schéma/migrace + ne-tajná konfigurace + vytvořený artefakt/tag/digest + skutečné test evidence. Rollback aplikace nevrací automaticky databázová data, proto popište omezení či ověřenou strategii obnovy.</p>
+<h2>6. Vyplnitelná šablona do README a evidence</h2>
+<pre><code class="language-md">## C09 — Integration, CI and Release Record
+C08 Change Card link and reviewed ACCEPT / NO_CHANGE / REJECT rationale:
+Before commit/tag; after commit/tag (same if no-change):
+Affected claims and new AC, unchanged regression basis:
+Changed code/data/config/ADR and relevant N/A:
+Peer review: reviewer, challenged assumption, decision:
+| Test ID | Accepted oracle | Exact command/data | Expected | Actual | PASS/FAIL/BLOCKED | Evidence |
+|---|---|---|---|---|---|---|
+| New behavior | | | | | | |
+| C08 regression TC-01 | | | | | | |
+| C08 regression TC-02 | | | | | | |
+Real integration boundary and post-commit state check:
+Dependency lock + runtime + DB schema + nonsecret config:
+Clean checkout/build/test/run commands and environment:
+CI job or automated local script, observed result/log link:
+Independent reproducer, steps, actual result and any hidden fix:
+Artifact identity/file/hash/tag and migration assumptions:
+Recovery/rollback limitation and remaining risks:
+Release candidate decision READY/CONDITIONAL/HOLD, owner, rationale:
+</code></pre>
+<h2>7. Definition of Done</h2>
+<ul>
+<li>Vazba na jedno skutečně reviewed rozhodnutí C08; implementovaná schválená změna <strong>nebo</strong> důkazově plnohodnotné NO_CHANGE, nikoliv účelově vymyšlený REJECT.</li>
+<li>Ověřené acceptance podmínky a původní regresní testy, minimálně jedna reálná integrační hranice; evidence expected/actual i trvalého stavu, kde je relevantní.</li>
+<li>Automatizovatelný build/test a CI tam, kde je dostupná; přesný commit/tag, schéma, konfigurace a logy.</li>
+<li>Nezávislý čistý checkout druhým členem, nebo přesně doložený blocker a next action.</li>
+<li>Release rozhodnutí s limity, riziky a skutečnou identitou artefaktu.</li>
+</ul>
+
+</section><section class="language" id="section-en" lang="en"><h2>English</h2><h1>C09 — Implementing the change, integration, CI and reproducible release</h1>
+
+<h2>1. From an approved change to a verified product version</h2>
+<p>C08 established the exact <em>before</em> baseline, a credible request, impact analysis, alternatives and a reviewed decision. <strong>C09 closes the path from decision to verified, identified product state.</strong> If the decision was ACCEPT, implement the smallest approved change, review it and execute new and regression tests. If a defensible REJECT/NO_CHANGE was accepted, do not invent a code delta: reproduce the unchanged baseline, show the preserved claims and the feasible compensating response. A bare DEFER without the needed decision evidence is insufficient.</p>
+<p><strong>Engineering sequence:</strong> accepted CR → branch/patch → review → build → unit + real integration check → CI feedback → clean checkout → artifact/schema/config identity → release candidate decision. <code>Green CI</code> only proves the checks that actually ran, not total correctness or authorization to deploy.</p>
+<p><strong>Your team's change:</strong> continue with the actual Change Request and approved option reviewed in C08. The CR-08 below is a worked example of the method, not a mandatory new feature for your system.</p>
+<h2>2. Outcome and fair scope</h2>
+<p>Produce <strong>one</strong> identified release candidate or documented HOLD, not a cloud platform. Reuse your current stack. Evidence includes before/after commit/tag (possibly identical for no-change), executable build/test instructions, review, new and regression tests designed in C08, now executed, <strong>at least one real integration boundary</strong>, and a clean reproduction by a different team member. Use push/PR CI if accessible; otherwise provide an automatable script plus the reason for the limitation. Kubernetes, Docker, GitHub, GitLab and cloud hosting are not mandatory.</p>
+<p><strong>Complete unfinished work before the next exercise.</strong> Report actual evidence; use <code>NOT RUN</code> for tests not executed and <code>BLOCKED</code> for a real obstacle, its cause and a feasible next action.</p>
+<h2>3. The exact procedure, with reasons</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Do this</th>
+<th>Why it matters</th>
+<th>Evidence in the existing project</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0. Reopen C08</td>
+<td>Select reviewed CR, decision, impacts and test basis</td>
+<td>Do not code an unaccepted requirement</td>
+<td>CR/decision link, before commit</td>
+</tr>
+<tr>
+<td>1. Limit delta</td>
+<td>Name changed behavior, code, data, config and justified N/A</td>
+<td>Prevent scope creep and hidden effects</td>
+<td>Change scope + test mapping</td>
+</tr>
+<tr>
+<td>2. Implement or reproduce</td>
+<td>ACCEPT: bounded reviewed code; NO_CHANGE: verified original identity</td>
+<td>Actual work must match decision</td>
+<td>PR/commit or no-change evidence</td>
+</tr>
+<tr>
+<td>3. Review and test</td>
+<td>Peer challenges contract, regression, failure path and diff</td>
+<td>Tests alone are not semantic acceptance</td>
+<td>Review outcome and run links</td>
+</tr>
+<tr>
+<td>4. Automate</td>
+<td>One repeatable build and test process with real integration</td>
+<td>Remove manual hidden setup</td>
+<td>Script/CI job, exit status, log</td>
+</tr>
+<tr>
+<td>5. Clean checkout</td>
+<td>Different member follows README in a fresh location</td>
+<td>Exposes hidden developer-only dependencies</td>
+<td>Commands, environment and observed result</td>
+</tr>
+<tr>
+<td>6. Identify release</td>
+<td>Record artifact, dependency lock, schema and config</td>
+<td>A source hash alone is not product identity</td>
+<td>Release candidate manifest and limits</td>
+</tr>
+<tr>
+<td>7. Decide</td>
+<td>READY / CONDITIONAL / HOLD based on observed evidence</td>
+<td>Build, verification and approval are distinct</td>
+<td>Owner, rationale and remaining unknowns</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Detailed explanation of each step</h3>
+<h4>Step 0 — Take over the reviewed C08 decision</h4>
+<p>Open your C08 Change Card. Locate the <strong>exact requirement and acceptance criteria</strong>, selected option, rationale and source commit used for impact analysis. Check that the reviewed disposition is genuinely <code>ACCEPT</code>; resolve any stated conditions before coding. For an evidence-backed <code>NO_CHANGE/REJECT</code>, verify the unchanged baseline and rationale rather than fabricating code changes.</p>
+<p><strong>Example:</strong> A 30-minute confirmation window needs an explicit outcome at exactly <code>30:00</code>; without that rule, no independent expected test result exists. <strong>Complete when:</strong> the Change Card, decision and before-commit are directly traceable.</p>
+<h4>Step 1 — Bound the smallest real delta</h4>
+<p>Use the C08 Impact Matrix to identify the <strong>specific parts of your existing system</strong> that may change: API, business rule, state transition, persisted data, configuration or tests. Say what changes and what is intentionally unchanged. Mark something <code>N/A</code> only with a short reason. Do not design a replacement architecture; bound the implementation and its regression exposure.</p>
+<p><strong>Example:</strong> Server-side approval time checking may affect a handler, clock source and tests without requiring a database migration. <strong>Complete when:</strong> scope and unchanged behavior are explicit.</p>
+<h4>Step 2 — Implement the accepted option</h4>
+<p>Start from the identified before-baseline. For <code>ACCEPT</code>, make a version-controlled change to code and any affected migration/specification, with a traceable commit or PR. Keep the change inside the approved option. If an important new effect appears, return it to decision review rather than silently expanding scope. Defensible <code>NO_CHANGE</code> does not need a synthetic implementation commit.</p>
+<p><strong>Example:</strong> Enforce expiration server-side before the confirming persistent transition; hiding a client button is insufficient. <strong>Complete when:</strong> the diff and commit can be mapped to the accepted criteria.</p>
+<h4>Step 3 — Review and execute real tests</h4>
+<p>A teammate challenges the diff against acceptance criteria, including normal path, exact boundary, rejection path, persistence and concurrency where relevant. Execute <strong>new behavior tests and C08 regression tests</strong>, recording predeclared <code>expected</code>, observed <code>actual</code>, verdict, command and commit. At least one check must cross a <strong>real integration boundary</strong> (for example, service to test database), not just a mock. For stateful claims independently read committed state.</p>
+<p><strong>Example:</strong> At <code>29:59</code> approval may produce independently confirmed persisted <code>CONFIRMED</code>; at illustrative <code>30:00</code> rejection must leave the record not confirmed. <strong>Complete when:</strong> real evidence and test runs exist, not just authored test cases.</p>
+<h4>Step 4 — Automate the build and checks</h4>
+<p>Write a repeatable command or script that handles dependency preparation, build and relevant automated tests. Wire it into an existing push/PR CI workflow if available; otherwise use an executable local automation script and document that limitation. Capture <strong>commit, environment, command, exit code and log</strong>. Ensure the real integration check belongs to this automated run rather than being an undocumented manual step.</p>
+<p><strong>Example:</strong> <code>./mvnw clean verify</code> is suitable only if the project actually configures the intended integration tests. A green job does not cover absent tests. <strong>Complete when:</strong> another teammate can run the same check and see which tests executed.</p>
+<h4>Step 5 — Reproduce from a clean checkout</h4>
+<p>A different team member clones or checks out the exact commit into <strong>a new directory</strong> and follows only the README to prepare the declared environment and test data, build, test and start/smoke-check the service. Undocumented author-only fixes are not allowed as evidence of reproducibility. Record OS/runtime, required nonsecret environment variable names, exact commands, observed results and any blocker.</p>
+<p><strong>Example:</strong> If the run requires an unmentioned local <code>.env</code>, the clean checkout <strong>failed</strong>. Document the config and retry. <strong>Complete when:</strong> independent reproduction passes or the failure and next action are precisely evidenced.</p>
+<h4>Step 6 — Identify the release candidate</h4>
+<p>Record the resulting <strong>commit/tag and built artifact</strong> (filename, version or hash), runtime, pinned dependencies, database schema/migrations and nonsecret configuration. Attach real checks and known limitations. Describe how application rollback would work and remember that <strong>rolling back code does not automatically undo stored database changes</strong>. A cloud deployment is not required.</p>
+<p><strong>Example:</strong> Commit <code>9d25c41</code>, an artifact built from that commit, declared DB migration and matching test log. <strong>Complete when:</strong> another engineer can identify exactly what would be tested or delivered.</p>
+<h4>Step 7 — Make an evidence-based decision</h4>
+<p>Compare the actual evidence with the accepted criteria and unchanged invariants. <code>READY</code> requires relevant completed checks, <code>CONDITIONAL</code> states limitations and conditions, and <code>HOLD</code> names failed checks or missing evidence. Record who takes responsibility, the rationale and what would change the decision. <strong>Green CI is not deployment authorization.</strong></p>
+<p><strong>Example:</strong> All acceptance and regression tests pass, but a second member&#x27;s clean checkout fails because database configuration was undocumented → <code>HOLD</code>, repair README and rerun. <strong>Complete when:</strong> the decision can be defended with actual results and source links.</p>
+<h2>4. Worked example: CR-08 expiry guard</h2>
+<p>The previous C08 example approved <strong>lazy expiry upon Approve</strong>, rejecting approval after 30 minutes. First express the actual accepted conditions: <code>AC-01</code> before deadline may confirm, <code>AC-02</code> after deadline cannot confirm, <code>AC-03</code> defines the exact boundary (in this <strong>illustrative</strong> example, reject at age ≥ 30:00), and <code>AC-04</code> preserves BR-02: no two overlapping CONFIRMED bookings for the same exclusive resource. Expected results must come from that reviewed contract, not from new implementation behavior.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Evidence</th>
+<th>Concrete example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Before/after</td>
+<td><code>before=3f8a2b1; after=9d25c41</code>, schema/config at both</td>
+</tr>
+<tr>
+<td>Code review</td>
+<td>Reviewer checked authoritative clock, permission, late conflict and persistence commit</td>
+</tr>
+<tr>
+<td>New test</td>
+<td><code>TC-CR08-03</code>: isolated data, PENDING, controlled clock, Approve, committed read</td>
+</tr>
+<tr>
+<td>Negative</td>
+<td>At 30:01, B2 stays not CONFIRMED and rejection/state matches contract</td>
+</tr>
+<tr>
+<td>Regression</td>
+<td>Rerun C08 TC-C08-01/02 with accepted independent persisted-state oracle</td>
+</tr>
+<tr>
+<td>CI</td>
+<td>Example <code>./mvnw -q verify</code> plus actual DB integration job, adapt to stack</td>
+</tr>
+<tr>
+<td>Clean checkout</td>
+<td>Other member ran from README without local undocumented files</td>
+</tr>
+<tr>
+<td>Limit</td>
+<td>Worker nonexistent → N/A; rollback of old pending data untested → explicit uncertainty</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Executable integration test case</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>#</th><th>Action</th><th>Expected</th><th>Actual / evidence</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Initialize isolated DB: B2 PENDING, no conflict; record creation and commit</td><td>Known baseline, B2 PENDING, before any test run</td><td><em>complete only after execution</em></td></tr>
+<tr><td>2</td><td>Set age 29:59 and invoke actual Approve(B2)</td><td>AC-01: allowed for B2; expected reply from approved contract</td><td><em>complete only after execution</em></td></tr>
+<tr><td>3</td><td>BEFORE reset, independently query committed B2 and CONFIRMED intervals in a new DB transaction</td><td>B2 now CONFIRMED, same ID/interval; no forbidden overlap under BR-02</td><td><em>complete only after execution</em></td></tr>
+<tr><td>4</td><td>Reset to identical PENDING fixture; set exactly 30:00; Approve(B2) then independently read DB</td><td>Illustrative AC-03: reject at age ≥ 30:00; B2 not CONFIRMED and no erroneous write</td><td><em>complete only after execution</em></td></tr>
+<tr><td>5</td><td>Reset again to initial PENDING; set 30:01; invoke Approve(B2)</td><td>AC-02: rejected; B2 not confirmed</td><td><em>complete only after execution</em></td></tr>
+<tr><td>6</td><td>After 30:01, read committed B2 and conflicting intervals via new DB transaction</td><td>B2 not CONFIRMED; invariant BR-02 still holds</td><td><em>complete only after execution</em></td></tr>
+<tr><td>7</td><td>Run existing C08 TC-C08-01/02 and affected regression checks</td><td>Previously accepted claims preserved; real outcomes after execution</td><td><em>complete only after execution</em></td></tr>
+</tbody></table></div>
+<p>If your approved AC-03 chooses a different inclusion rule at 30:00, define that independent expected outcome <strong>before</strong> execution; never infer it from the code. For every real run record commit, fixture, time source, independent DB query and actual separately. This worked table is a test specification, not an executed PASS.</p>
+<p><code>assert HTTP != 200</code> alone is not proof of persisted state. A mock-only unit test is not the real transaction integration check. A correctly active DB exclusion mechanism may constrain direct SQL too; do not claim every direct write bypasses the DB. Planned CI/untested code is PLANNED or BLOCKED, never PASS.</p>
+<h2>5. CI, dependencies and clean reproduction</h2>
+<p>Write exact README commands to install dependencies, set up a test DB/schema, build, test, run and smoke. Illustrations include <code>./mvnw clean verify</code>, <code>npm ci &amp;&amp; npm test</code>, or <code>pytest</code>, depending on the existing project. A pipeline records tested commit/PR, environment, commands, exit codes and logs. A meaningful integration check crosses a real boundary such as a test DB, not only a mocked repository. Describe required secret variables without publishing actual credentials.</p>
+<p><strong>Clean checkout:</strong> another team member obtains the exact tag/commit in a new directory, follows the README and known harmless configuration, prepares data and executes build/tests/run. Record environment, command, expected and actual. If they need undocumented personal files or manual author intervention, the result is FAIL/BLOCKED with a corrective action, not “reproducible.”</p>
+<p><strong>Release identity</strong> combines source, resolved dependency versions/lock, runtime, database schema/migration, nonsecret config, built artifact/tag/digest and actual check results. Reverting application code does not automatically reverse database changes; document a tested recovery or a candid limit.</p>
+<h2>6. Copyable template inside README and living evidence</h2>
+<pre><code class="language-md">## C09 — Integration, CI and Release Record
+C08 Change Card and reviewed ACCEPT/NO_CHANGE/REJECT rationale:
+Before and after commit/tag (identical if no-change):
+Affected claims/new AC and unchanged regression basis:
+Changed code/data/config/ADR and justified N/A:
+Peer review: reviewer, challenged assumption, disposition:
+| Test ID | Independent accepted oracle | Exact command/data | Expected | Actual | PASS/FAIL/BLOCKED | Evidence |
+|---|---|---|---|---|---|---|
+| New behavior | | | | | | |
+| C08 regression TC-01 | | | | | | |
+| C08 regression TC-02 | | | | | | |
+Actual integration boundary and committed-state check:
+Dependency lock, runtime, DB schema, nonsecret config:
+Clean checkout/build/test/run commands and environment:
+CI job or local automated script and actual log:
+Independent reproducer, exact steps and outcome:
+Artifact identity/file/hash/tag and migration assumptions:
+Rollback/recovery limitation, residual risks:
+Release decision READY/CONDITIONAL/HOLD, owner, rationale:
+</code></pre>
+<h2>7. Definition of Done</h2>
+<ul>
+<li>One real C08 reviewed decision; implemented ACCEPT <strong>or</strong> fully supported NO_CHANGE, never a fabricated trivial rejection.</li>
+<li>Executed accepted new and regression checks across at least one relevant real integration boundary; actual expected/observed data and persisted state when relevant.</li>
+<li>Automatable build/test, CI when available, identified code/config/schema and real execution log.</li>
+<li>Independent clean checkout by another person, or precisely evidenced blocker with feasible next action.</li>
+<li>Release decision with actual artifact identity and known risks.</li>
+</ul>
+
+</section></main>
+
+<script>
+(()=>{let cz=document.querySelector('#section-cs'),en=document.querySelector('#section-en'),bcz=document.querySelector('#lang-cs'),ben=document.querySelector('#lang-en');
+function setLanguage(which){let iscz=which==='cs';cz.hidden=!iscz;en.hidden=iscz;bcz.setAttribute('aria-pressed',String(iscz));ben.setAttribute('aria-pressed',String(!iscz));document.documentElement.lang=which;}
+bcz.addEventListener('click',()=>setLanguage('cs'));ben.addEventListener('click',()=>setLanguage('en'));
+for(let table of document.querySelectorAll('table')){if(table.parentElement?.classList.contains('table-wrap'))continue;let box=document.createElement('div');box.className='table-wrap';table.parentNode.insertBefore(box,table);box.appendChild(table);}
+for(let pre of document.querySelectorAll('pre')){let bar=document.createElement('div');bar.className='copybar';let btn=document.createElement('button');btn.type='button';btn.textContent=pre.closest('section').lang==='cs'?'Kopírovat šablonu':'Copy template';btn.addEventListener('click',async()=>{let code=pre.querySelector('code')?.textContent??pre.textContent;try{if(!navigator.clipboard?.writeText)throw new Error('clipboard unavailable');await navigator.clipboard.writeText(code);btn.textContent=pre.closest('section').lang==='cs'?'Zkopírováno':'Copied';}catch(e){if(pre.closest('section')?.hidden)return;document.querySelector('#manual-copy-dialog')?.remove();let dialog=document.createElement('div');dialog.id='manual-copy-dialog';dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.style.cssText='position:fixed;inset:0;background:#14283dcc;display:flex;justify-content:center;align-items:center;z-index:999;padding:1rem';let inner=document.createElement('div');inner.style.cssText='background:white;padding:1.2rem;border-radius:12px;width:min(720px,95vw);max-height:90vh;display:flex;flex-direction:column;gap:.6rem';let label=document.createElement('strong');label.textContent=document.documentElement.lang==='cs'?'Vyberte text (Ctrl+C) a potom zavřete':'Select text (Ctrl+C), then close';let t=document.createElement('textarea');t.value=code;t.style.cssText='width:100%;height:min(55vh,380px);font:14px monospace';let close=document.createElement('button');close.type='button';close.textContent=document.documentElement.lang==='cs'?'Zavřít':'Close';close.addEventListener('click',()=>dialog.remove());inner.append(label,t,close);dialog.append(inner);document.body.append(dialog);t.focus();t.select();let escape=(ev)=>{if(ev.key==='Escape'){dialog.remove();document.removeEventListener('keydown',escape)}};document.addEventListener('keydown',escape);btn.textContent=document.documentElement.lang==='cs'?'Ruční kopírování':'Manual copy';}});bar.append(btn);pre.before(bar);}
+setLanguage('cs');})();
+</script></body></html>

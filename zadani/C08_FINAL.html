@@ -1,0 +1,905 @@
+<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SWI C08 — Complete CZ / EN assignment</title>
+<style>
+:root{--ink:#152840;--muted:#4c5e6e;--acc:#206994;--light:#e6f1f6;--paper:#ffffff;--stroke:#c8d5dc;--bg:#f1f4f6}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.7 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{background:#102940;color:white;padding:1.4rem max(1.5rem,calc((100vw - 1120px)/2)) 1.1rem}
+header small{color:#acd6e7;letter-spacing:.11em;font-size:.75rem;font-weight:700}header h1{font-size:1.9rem;line-height:1.25;margin:.4rem 0}
+header p{margin:.2rem 0;color:#dbeaf1}nav{display:flex;gap:.65rem;align-items:center;flex-wrap:wrap;max-width:1120px;margin:0 auto;padding:1rem .5rem}
+nav button{border:1px solid #b6c9d4;border-radius:8px;background:#fff;color:#1d4762;padding:.55rem 1rem;font:inherit;font-weight:700;cursor:pointer}
+nav button[aria-pressed=true]{background:#156c93;color:white;border-color:#156c93}
+nav .hint{color:#516c7d;font-size:.9rem;margin-left:auto}
+main{max-width:1120px;margin:0 auto 3rem;padding:0 .5rem}.language{background:white;border:1px solid var(--stroke);border-radius:14px;padding:1.25rem 2rem;box-shadow:0 3px 12px #2336450b}
+.language>h2:first-child{margin-top:0;border:0}.language h1{font-size:1.65rem;line-height:1.28;margin:0 0 1.2rem}
+.language h2{font-size:1.42rem;margin-top:2.4rem;line-height:1.3;border-top:1px solid #d2e1e7;padding-top:1.15rem}
+.language h3{font-size:1.13rem;margin-top:1.6rem}.language p{margin:.8rem 0}.language blockquote{border-left:5px solid #2b8aaf;background:#eaf6f9;padding:.6rem 1.1rem;margin:1.1rem 0;font-weight:450}
+.language blockquote p{margin:.35rem 0}.language table{border-collapse:collapse;min-width:720px;width:100%;font-size:.91rem;line-height:1.48}
+.language th,.language td{border:1px solid #c4d6dc;padding:.55rem .62rem;vertical-align:top;text-align:left}
+.language th{background:#eaf1f5}.language tr:nth-child(even) td{background:#f6f9fa}
+.language pre{background:#102c42;color:#e9f5fb;border-radius:9px;padding:1.05rem 1.1rem;overflow:auto;line-height:1.45;font-size:.88rem}
+.language pre code{color:inherit}.language :not(pre)>code{background:#eaf2f5;color:#155370;border-radius:3px;padding:0 .18rem}
+.language ul,.language ol{padding-left:1.65rem}.language li{margin:.33rem 0}.table-wrap{width:100%;overflow:auto;margin:1.1rem 0}
+.copybar{display:flex;justify-content:flex-end;margin-bottom:-.2rem}.copybar button{padding:.35rem .7rem;font-weight:600;border:1px solid #adcad8;background:#fff;color:#175373;border-radius:7px;cursor:pointer}
+footer{max-width:1120px;margin:2rem auto;color:#536777;padding:0 1rem;font-size:.9rem}
+@media(max-width:700px){body{font-size:15px}.language{padding:1.15rem}.language h1{font-size:1.4rem}.language h2{font-size:1.2rem}header{padding:1rem 1.5rem}header h1{font-size:1.4rem}nav .hint{margin:0}}
+@media print{body{background:#fff}header{background:#fff;color:#152840;padding:1rem}nav{display:none}.language{box-shadow:none;border:0;padding:0}.language[hidden]{display:block!important;break-before:page}}
+</style></head><body>
+<header><small>VŠB FEI · SOFTWARE ENGINEERING · R17</small><h1>SWI C08 — CZECH / ENGLISH</h1><p>Detailed engineering procedure · Worked example · Reusable templates · Evidence</p></header>
+<nav aria-label="Choose assignment language"><button id="lang-cs" type="button" aria-pressed="true">Česky</button><button id="lang-en" type="button" aria-pressed="false">English</button></nav>
+<main><section id="section-cs" lang="cs" class="language"><h2>Česky</h2><h1>C08 — Controlled Change: od požadavku k rozhodnutí a ověřitelné změně</h1>
+<h2>1. Proč se změna nezačíná úpravou kódu</h2>
+<p>Změna softwaru není jen diff mezi dvěma commity. Musíme znát <strong>co platilo</strong>, <strong>proč a co má nově platit</strong>, <strong>které části systému to ovlivní</strong>, <strong>jaké možnosti řešení máme</strong>, <strong>kdo a na základě čeho rozhodne</strong> a <strong>jak ověříme, že nové chování je správné a staré zůstalo zachováno</strong>. Teprve potom má smysl implementovat. Tento postup provedete nad existující verzí vlastní aplikace.</p>
+<p><strong>Výsledkem je zdůvodněné rozhodnutí a plán ověření.</strong> Pro přijatou změnu přesně určete navazující implementaci a regresní testy. Pracujte v existujícím projektu.</p>
+<table>
+<thead>
+<tr>
+  <th>Fáze</th>
+  <th>Praktická otázka</th>
+  <th>Co konkrétně vzniká</th>
+  <th>Jak poznáme výsledek</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>0. Zmrazit <em>before</em></td>
+  <td>Jakou přesně verzi měníme?</td>
+  <td>commit, specifikace, konfigurace, DB, známé testy</td>
+  <td>Jiný člen obnoví stejný výchozí stav</td>
+</tr>
+<tr>
+  <td>1. Pojmenovat změnu</td>
+  <td>Co chce žadatel, proč a podle čeho to přijme?</td>
+  <td>Change Request (CR) a acceptance conditions</td>
+  <td>Formulace nevnucuje implementaci</td>
+</tr>
+<tr>
+  <td>2. Ověřit dosavadní chování</td>
+  <td>Co už musí platit a co nechceme zničit?</td>
+  <td>2 krokované test cases, nejméně jedno provedení</td>
+  <td>Expected vzniklo před během, actual je pozorováno</td>
+</tr>
+<tr>
+  <td>3. Analyzovat dopady</td>
+  <td>Co se dotkne pravidla, stavu, rozhraní, dat, testů a releasu?</td>
+  <td><strong>Impact Matrix</strong> s důvodem a odkazy</td>
+  <td>Každý dotčený prvek má rozhodnutí a důkaz</td>
+</tr>
+<tr>
+  <td>4. Posoudit varianty</td>
+  <td>Jak splnit potřebu s přijatelným rizikem?</td>
+  <td><strong>Options Matrix</strong> alespoň se 2 reálnými reakcemi</td>
+  <td>Srovnatelná kritéria a důsledky nečinnosti</td>
+</tr>
+<tr>
+  <td>5. Přijmout rozhodnutí</td>
+  <td>ACCEPT, REJECT, DEFER, nebo odůvodněné NO_CHANGE?</td>
+  <td>reviewed Change Card, owner, rozsah a podmínky</td>
+  <td>Někdo jiný umí zkontrolovat racionalitu rozhodnutí</td>
+</tr>
+<tr>
+  <td>6. Předat do C09</td>
+  <td>Co se změní, jak to ověříme a jakou baseline vydáme?</td>
+  <td>delta seznam + regresní a nová ověřovací kritéria</td>
+  <td>C09 nemusí hádat požadavky ani dopady</td>
+</tr>
+</tbody>
+</table>
+<h2>2. Vyplněný průběžný příklad: vypršení čekajícího schválení</h2>
+<p>Jde o <strong>ilustrační změnu</strong>, nikoli o povinnou novou funkci. Rezervační systém z C02 už může rozlišovat zdroje vyžadující schválení. Představme si konkrétní baseline, ve které čekající schválení může zůstat dlouho otevřené. Správce sportoviště žádá: <em>„Pokud čekající žádost nikdo neposoudí do 30 minut, nesmí už být potvrzena jako platná.“</em></p>
+<ul>
+<li><strong>Původní pravidlo:</strong> rezervace čeká ve stavu <code>PENDING_APPROVAL</code>; schválení a potvrzení respektuje dostupnost zdroje a zákaz překryvu dvou <code>CONFIRMED</code> rezervací stejného exkluzivního zdroje (BR-02). Přesný význam časů vychází ze specifikace týmu.</li>
+<li><strong>Nový požadavek CR-08:</strong> po uplynutí limitu není dovoleno změnit čekající žádost na <code>CONFIRMED</code>. Tým musí rozhodnout, zda vznikne explicitní <code>EXPIRED</code>, jak zaznamená čas vypršení a co uvidí uživatel.</li>
+<li><strong>Co nesmí změna rozbít:</strong> <code>Create</code>, <code>Cancel</code>, běžné platné potvrzení, oprávnění, a především invariant neexistence překryvu potvrzených rezervací.</li>
+<li><strong>Výslovně rozhodnout:</strong> podle jakého času se počítá limit (uložený UTC timestamp a serverové hodiny), co se stane přesně v hranici 30:00, co s již uloženými záznamy a jak se chová opakovaný/opožděný pokus.</li>
+</ul>
+<p>Pokud váš systém nemá čekající schválení, nevytvářejte ho jen pro C08. Vezměte například změnu storno politiky, dostupnosti, upozornění, časové granularity nebo konfigurace a vyplňte stejný postup. Neplatí, že všechny příkladové cesty (admin/import/worker) musíte implementovat.</p>
+<h2>3. Krok 0 — identifikujte výchozí baseline</h2>
+<p>Do existujícího <code>README.md</code> nebo <code>docs/evidence-and-evolution.md</code> uveďte commit/tag, runtime, testovací konfiguraci (bez hesel), verzi DB schématu a způsob připravení dat. Při přijatém pravidle vypište jeho ID a odkaz na přesnou pasáž specifikace a rozhodnutí architektury. Stav <code>PASS</code> se vztahuje pouze k testu skutečně vykonanému proti této baseline; screenshot ze starší verze není důkaz.</p>
+<p><strong>Příklad záznamu (hodnoty jsou demonstrativní):</strong> <code>baseline=3f8a2b1; spec=REQ-03/BR-02@v0.2; schema=003; runtime=Java 21; testDB=isolated; command=./mvnw verify; no secrets stored</code>. U vlastního projektu přizpůsobte nástroje; Java, Maven ani databáze určitého typu nejsou požadavkem.</p>
+<h2>4. Krok 1 — z požadavku udělejte testovatelné podmínky přijetí</h2>
+<p>Zapište původ požadavku, problém, přínos, okrajové případy a <strong>podmínky přijetí</strong>, aniž byste rovnou rozhodli, že musí vzniknout timer, mikroslužba či nový design pattern.</p>
+<table>
+<thead>
+<tr>
+  <th>Položka</th>
+  <th>Vyplněná ukázka CR-08</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Zdroj a potřeba</td>
+  <td>Správce: stará nevyřízená žádost nemá být dodatečně schválitelná</td>
+</tr>
+<tr>
+  <td>Předchozí chování</td>
+  <td>Žádost PENDING bez časového limitu (jen pro tento příklad)</td>
+</tr>
+<tr>
+  <td>AC-01 pozitivní</td>
+  <td>Schválení před hranicí 30 min splňující ostatní podmínky může uspět</td>
+</tr>
+<tr>
+  <td>AC-02 negativní</td>
+  <td>Pokus po hranici nesmí vytvořit <code>CONFIRMED</code>; stav je vysvětlen ve specifikaci</td>
+</tr>
+<tr>
+  <td>AC-03 hranice</td>
+  <td>Přesně <code>createdAt + 30 min</code> má výslovně definované očekávání</td>
+</tr>
+<tr>
+  <td>AC-04 regrese</td>
+  <td>Překrývající se <code>CONFIRMED</code> rezervace stále nemohou vzniknout</td>
+</tr>
+<tr>
+  <td>Mimo rozsah</td>
+  <td>Povinný nový worker, redesign UI či jiná technologie – není rozhodnuto</td>
+</tr>
+</tbody>
+</table>
+<p>Rozlišujte <strong>pozorovatelný kontrakt</strong> od <strong>mechanismu</strong>. „Po 30 minutách nelze potvrdit“ je požadavek; „spustit cron job každou minutu“ je jen jedna z variant návrhu.</p>
+<h2>5. Krok 2 — nejdřív skutečný test dosavadní baseline</h2>
+<h3>Jak se píše a provádí test case</h3>
+<p>Každý případ obsahuje: <strong>ID, test basis, baseline, preconditions, přesná testovací data, číslované steps, očekávaný výsledek pro kroky a konečný stav, skutečný výsledek, evidence, PASS/FAIL/BLOCKED/NOT RUN a rozhodnutí</strong>. <code>Expected</code> musí pocházet z přijatého pravidla, <strong>nikoli z toho, co vrátil aktuální kód</strong>. <code>Actual</code> vyplňujte až po provedení.</p>
+<p>Pro ilustraci dále předpokládáme exkluzivní zdroj <code>R1</code>, intervaly <code>[start,end)</code> a invariant BR-02: po commitu neexistují dvě překrývající se <code>CONFIRMED</code> rezervace stejného zdroje. Dva půlotevřené intervaly se překrývají, pokud <code>a.start &lt; b.end &amp;&amp; b.start &lt; a.end</code>. Sousední <code>[10,11)</code> a <code>[11,12)</code> kolize nejsou. U zdroje s kapacitou vyšší než 1 použijte vlastní přijatý invariant a <strong>maximální souběžné obsazení</strong>, ne mechanický zákaz všech překryvů.</p>
+<p><strong>TC-C08-01 – pozitivní sousední rezervace</strong>. Předpoklady: v izolované databázi <code>B1 CONFIRMED R1 [10:00,11:00)</code> a <code>B2 DRAFT/PENDING R1 [11:00,12:00)</code>; schvalovací podmínky pro <code>B2</code> jsou splněny. Jestliže je nutné schválení správcem, přidejte tento skutečný krok.</p>
+<table>
+<thead>
+<tr>
+  <th>#</th>
+  <th>Přesná akce / step</th>
+  <th>Expected před během</th>
+  <th>Actual + evidence po běhu</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>1</td>
+  <td>Obnovit izolovaná testovací data R1, B1, B2</td>
+  <td>Přesně jeden CONFIRMED; B2 čeká</td>
+  <td><em>doplnit při provedení</em></td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>Nezávisle přečíst uložené intervaly a stavy</td>
+  <td><code>[10,11)</code> a <code>[11,12)</code>, žádná jiná potvrzená kolize</td>
+  <td><em>doplnit</em></td>
+</tr>
+<tr>
+  <td>3</td>
+  <td>Vykonat skutečnou operaci Confirm/Approve(B2)</td>
+  <td>Operace může uspět podle přijatého kontraktu</td>
+  <td><em>doplnit</em></td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>Znovu načíst committed stav z persistence</td>
+  <td>Obě rezervace CONFIRMED; bez překryvu</td>
+  <td><em>doplnit</em></td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>Vrátit testovací data do výchozího stavu</td>
+  <td>Test lze opakovat beze změny vstupů</td>
+  <td><em>doplnit</em></td>
+</tr>
+</tbody>
+</table>
+<p><strong>TC-C08-02 – negativní pokus o kolizi.</strong> Předpoklady: <code>B1 CONFIRMED R1 [10:00,11:00)</code> a <code>B2 DRAFT/PENDING R1 [10:30,11:30)</code>; oprávnění jsou pro test splněna. Konkrétní HTTP kód (např. 409) není povinný, rozhoduje <strong>váš přijatý kontrakt</strong>.</p>
+<table>
+<thead>
+<tr>
+  <th>#</th>
+  <th>Přesná akce / step</th>
+  <th>Expected před během</th>
+  <th>Actual + evidence po běhu</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>1</td>
+  <td>Resetovat a připravit R1, B1, B2</td>
+  <td>Jen B1 je CONFIRMED</td>
+  <td><em>doplnit</em></td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>Nezávisle přečíst výchozí uložený stav</td>
+  <td>Překryv v čase existuje, ale není druhé potvrzení</td>
+  <td><em>doplnit</em></td>
+</tr>
+<tr>
+  <td>3</td>
+  <td>Zavolat skutečné Confirm/Approve(B2)</td>
+  <td>Konflikt je odmítnut dle přijatého kontraktu</td>
+  <td><em>doplnit</em></td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>Přečíst uložený stav <strong>po commitu / rollbacku</strong></td>
+  <td>B1 beze změny, B2 <strong>není CONFIRMED</strong></td>
+  <td><em>doplnit</em></td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>Zopakovat po resetu</td>
+  <td>Reprodukovatelný výsledek</td>
+  <td><em>doplnit</em></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Důkaz:</strong> přesný commit, příkaz nebo API request, test data, log/output, dotaz na <strong>skutečnou autoritativní persistenci</strong>, výsledek a limit testu. Nezaměňujte úspěšnou HTTP odpověď ani zelený mock s důkazem uloženého invariantu. Pro souběžné Confirm požadavky je potřeba zvláštní test se dvěma soupeřícími operacemi. Pokud test proveden nebyl, je <code>NOT RUN</code>; pokud nešel kvůli konkrétní překážce, <code>BLOCKED</code> + důvod + opakovatelný další krok. Na C08 potřebujete <strong>dva navržené případy a alespoň jedno skutečné integrační/systémové provedení</strong> (nebo přiznané BLOCKED s důkazem překážky).</p>
+<h2>6. Krok 3 — Impact Analysis: projděte dopady až k důkazům</h2>
+<p><strong>Impact analysis neznamená seznam změněných souborů.</strong> Jde o procházení závislostí od nového pozorovatelného pravidla k tomu, kdo ho vynucuje, ukládá, používá, konfiguruje, ověřuje a vydává. Nezměněný soubor může být <em>dotčený</em> změnou kontraktu. U každé oblasti rozhodněte <code>CHANGE / CHECK / NO IMPACT</code> a <strong>proč</strong>; doplňte odkazy na skutečné artefakty a požadovaný důkaz.</p>
+<h3>Vyplněná Impact Matrix pro CR-08</h3>
+<table>
+<thead>
+<tr>
+  <th>Vrstva / položka</th>
+  <th>Konkrétní dopad a proč</th>
+  <th>CHANGE / CHECK / NO IMPACT</th>
+  <th>Nutná akce</th>
+  <th>Důkaz pro dokončení</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Požadavek / BR</td>
+  <td>Pravidlo vypršení PENDING; nová hrana ve stavovém modelu</td>
+  <td>CHANGE</td>
+  <td>Upřesnit AC a hraniční čas</td>
+  <td>Review specifikace + test basis</td>
+</tr>
+<tr>
+  <td>Stavový model</td>
+  <td>Přechod PENDING → EXPIRED a zákaz pozdního Confirm</td>
+  <td>CHANGE</td>
+  <td>Popsat guard a stav po odmítnutí</td>
+  <td>Transition tests pro hranici</td>
+</tr>
+<tr>
+  <td>Architektura</td>
+  <td>Kdo vlastní časové rozhodnutí, kdo smí měnit status?</td>
+  <td>CHECK</td>
+  <td>Najít autoritativní službu a další reálné writer paths</td>
+  <td>C3/ADR odkaz, review ownership</td>
+</tr>
+<tr>
+  <td>Detailní návrh</td>
+  <td><code>approve()</code> používá <code>createdAt</code> a hodiny; idempotency</td>
+  <td>CHANGE</td>
+  <td>Guard, kontrakt, chyba a návratové hodnoty</td>
+  <td>Jednotkové/komponentové testy</td>
+</tr>
+<tr>
+  <td>Persistence / data</td>
+  <td>Uložit/interpretovat čas; staré PENDING záznamy</td>
+  <td>CHECK</td>
+  <td>Prověřit schéma, migraci, výchozí hodnoty</td>
+  <td>Test na existujících řádcích</td>
+</tr>
+<tr>
+  <td>API / oprávnění</td>
+  <td>Sdělí klientovi odmítnutí? Kdo schvaluje?</td>
+  <td>CHECK</td>
+  <td>Upřesnit response a roli</td>
+  <td>Pozitivní + negativní integrační test</td>
+</tr>
+<tr>
+  <td>Konfigurace / deployment</td>
+  <td>Limit může být konfigurovatelný; časové zóny</td>
+  <td>CHECK</td>
+  <td>Zdokumentovat jednotky a default</td>
+  <td>Reprodukovatelný config-smoke</td>
+</tr>
+<tr>
+  <td>Testy / evidence</td>
+  <td>Staré Confirm a BR-02; nově hrana a expiry</td>
+  <td>CHANGE</td>
+  <td>Regrese + nový oracle před implementací</td>
+  <td>Expected/actual a test report</td>
+</tr>
+<tr>
+  <td>Release / recovery</td>
+  <td>Změna interpretace již čekajících rezervací</td>
+  <td>CHECK</td>
+  <td>Plán kompatibility/rollback omezení</td>
+  <td>Přesný release záznam</td>
+</tr>
+<tr>
+  <td>Uživatel / provoz</td>
+  <td>Žádost může zmizet z čekajících</td>
+  <td>CHECK</td>
+  <td>Dohodnout pozorovatelný stav a informování</td>
+  <td>Akceptační scénář nebo omezení</td>
+</tr>
+</tbody>
+</table>
+<p>Jestliže nemáte worker/import/admin rozhraní, napište <code>NO IMPACT: tato write path neexistuje</code>. Existující přímý SQL zápis neignorujte: <strong>správně aktivní databázové omezení</strong> může chránit i tento zápis; jednoduchá API-only kontrola však není automaticky ochrana všech skutečně existujících cest. Nevyžadujeme zbytečné komponenty pro demonstraci.</p>
+<h3>Praktická metoda hledání závislostí</h3>
+<ol>
+<li>Vyberte <strong>výchozí tvrzení</strong> (např. AC-02: pozdní schválení neuspěje).</li>
+<li>Najděte <strong>vlastníka rozhodnutí</strong> v aktuální architektuře (ne navržený framework).</li>
+<li>Sledujte <strong>volání a data</strong> až k uložení stavu a všem reálným konzumentům.</li>
+<li>Pro každé změněné rozhraní identifikujte <strong>závislé jednotky a testy</strong>.</li>
+<li>Oddělte <strong>změnu dokumentovaného kontraktu</strong> od <strong>pouhé nutnosti regresní kontroly</strong>.</li>
+<li>Zkontrolujte <strong>konfiguraci, migraci, provozní chování a obnovu</strong>, pokud jsou relevantní.</li>
+<li>Připravte <strong>evidenci pro každý dopad</strong> a nezdůvodněné <code>N/A</code> nenechávejte prázdné.</li>
+</ol>
+<h2>7. Krok 4 — Alternative Analysis: nevybírejte řešení podle prvního nápadu</h2>
+<p>Porovnejte nejméně dvě <strong>reálně proveditelné</strong> reakce; jedna může být nezměnit kód, pokud skutečně řeší původní potřebu. Použijte společná kritéria: splnění AC, rozsah změny, čas a zdroje, složitost dat a nasazení, rizika/failure modes, reverzibilita a důkazy k ověření. Nepřidělujte pseudoexaktní skóre bez podkladů.</p>
+<table>
+<thead>
+<tr>
+  <th>Varianta</th>
+  <th>Jak řeší potřebu</th>
+  <th>Výhody</th>
+  <th>Náklady / rizika</th>
+  <th>Jak ověříme</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>A: lazy expiry při schvalování</strong></td>
+  <td>Autoritativní Confirm kontroluje deadline, odmítne a uloží EXPIRED</td>
+  <td>Malá změna, bez nového workera</td>
+  <td>Stará PENDING zůstávají viditelná, dokud je někdo nečte; potřeba přesných hodin</td>
+  <td>Test před / na / po hranici + BR-02 regrese</td>
+</tr>
+<tr>
+  <td><strong>B: worker + guard</strong></td>
+  <td>Periodický proces označuje vypršení; Confirm současně hlídá deadline</td>
+  <td>Včas aktualizovaná fronta</td>
+  <td>Scheduler, retry, závod, nové provozní selhání</td>
+  <td>Retry/late commit, worker + DB stav, restart</td>
+</tr>
+<tr>
+  <td><strong>C: bez automatického expiry</strong></td>
+  <td>Zpřehlednění fronty a ruční eskalace</td>
+  <td>Nejmenší zásah do kódu</td>
+  <td>Nepokrývá plně AC-02; musí projít rozhodnutím žadatele</td>
+  <td>Prokazatelný procesní výsledek a přijatý limit</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Modelové rozhodnutí:</strong> pro malé řešení přijmout A, pokud stakeholder schválí, že stav nevyřízených žádostí se zaktualizuje při pokusu a není garantované proaktivní zmizení ze seznamu. Je nutná úprava AC a review. Pokud potřebujeme garantovat automatické vypršení i bez interakce, A nestačí a B dává větší smysl. Rozhodnutí není univerzální pravda, ale důsledek přijatého kontraktu.</p>
+<h2>8. Krok 5 — rozhodnutí, review a předávka do C09</h2>
+<p>Zapište <code>ACCEPT / REJECT / DEFER / NO_CHANGE</code> spolu s důvodem a jménem spolužáka, který výběr kriticky posoudil. <code>DEFER</code> potřebuje konkrétní chybějící údaj, vlastníka a podmínku dalšího rozhodnutí. <code>REJECT/NO_CHANGE</code> potřebuje věrohodný podnět, konkrétní negativní dopad navrhované úpravy, <strong>proveditelnou alternativu nebo kompenzační reakci</strong> a reprodukovatelnou kontrolu zachované baseline; účelově nesmyslná žádost se snadným zamítnutím nestačí. Pokud rozhodnete <code>ACCEPT</code>, určete nejmenší delta, test oracle a co bude v C09 prokazovat implementaci a regresi.</p>
+<table>
+<thead>
+<tr>
+  <th>Předávka</th>
+  <th>Příklad pro variantu A</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Před změnou</td>
+  <td>commit <code>3f8a2b1</code>, BR-02, TC-C08-01/02 (záznamy výsledků)</td>
+</tr>
+<tr>
+  <td>Přijato</td>
+  <td>CR-08: schválení po deadline odmítnout, při pokusu uložit EXPIRED</td>
+</tr>
+<tr>
+  <td>Změna</td>
+  <td>Guard v existujícím ownerovi, ukládaný stav, kontrakt odmítnutí</td>
+</tr>
+<tr>
+  <td>Nové test basis</td>
+  <td>29:59 povolit; 30:00 přesně definovat; 30:01 zamítnout</td>
+</tr>
+<tr>
+  <td>Regrese</td>
+  <td>TC-C08-01/02 + Cancel a oprávnění podle skutečně dotčených cest</td>
+</tr>
+<tr>
+  <td>Riziko</td>
+  <td>Race mezi schválením a expiry; vlastníkem je tým, důkaz zatím NOT VERIFIED</td>
+</tr>
+<tr>
+  <td>C09 handoff</td>
+  <td>commit/PR změny, integrační běh, clean checkout, CI/build a rozhodnutí o releasu</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Oddělujte stavy:</strong> <code>PLANNED</code> ≠ <code>IMPLEMENTED</code> ≠ <code>VERIFIED</code>. Pouhé návrhové opatření nesnižuje skutečné reziduální riziko. Neúspěšný test je hodnotný nález, pokud jej doložíte a vyhodnotíte.</p>
+<h2>9. Šablony do existujícího repozitáře (bez dalšího reportu)</h2>
+<p>Vložte relevantní části do <code>docs/intent-and-change.md</code> (CR, impact, options, decision) a <code>docs/evidence-and-evolution.md</code> (test cases a výsledky); konfiguraci a příkazy nechávejte v <code>README.md</code>. Níže je záměrně <strong>vyplnitelná</strong> forma, ne seznam nových dokumentů.</p>
+<h3>Šablona Change Request + Impact + Decision</h3>
+<pre><code class="language-md">## C08 / CR-___ — Controlled Change Card
+Request source and concrete project need:
+Before commit/tag + spec/BR/ADR + schema/config:
+Old accepted behavior / observable limitation:
+New intended behavior, scope, out of scope:
+Acceptance conditions AC-01 .. (positive, negative, boundary):
+Impact analysis method / evidence reviewed:
+| Dimension / exact artifact | CHANGE/CHECK/NO IMPACT + why | Needed delta/verification | Owner/evidence |
+|---|---|---|---|
+| Spec/BR/state | | | |
+| Architecture/ownership/interfaces | | | |
+| Detailed design/code | | | |
+| Data/schema/migration | | | |
+| Configuration/CI/release | | | |
+| Tests/integration/risks | | | |
+| Operation/recovery | | | |
+Alternatives and comparable criteria:
+| Option | Meets AC? | Benefit | Cost/failure/rollback | Verification |
+|---|---|---|---|---|
+| A | | | | |
+| B | | | | |
+Inaction consequences / feasible compensation:
+Peer reviewer and challenged assumption:
+Decision ACCEPT / REJECT / DEFER / NO_CHANGE, owner, date, reason:
+If ACCEPT: smallest change and acceptance tests to perform in C09:
+If NO_CHANGE/REJECT: independent existing-baseline evidence and response:
+Open uncertainty and next trigger:
+</code></pre>
+<h3>Šablona pro každý skutečný test case a jeho provedení</h3>
+<pre><code class="language-md">## C08 / TC-___ — name
+Test basis (accepted rule + revision) / relevant risk ID or N/A:
+Baseline commit, schema, runtime, test setup and command:
+Preconditions + roles + exact initial DB/state:
+Test data incl. interval semantics/timezone:
+| # | Action / input | Expected BEFORE execution | Actual AFTER execution | Evidence link |
+|---|---|---|---|---|
+| 1 | | | | |
+| 2 | | | | |
+| 3 | | | | |
+| 4 | | | | |
+Final postcondition / independent persisted-state oracle:
+Verdict PASS / FAIL / BLOCKED / NOT RUN + observed basis:
+If FAIL: defect/issue and what is contradicted:
+If BLOCKED: actual obstacle, reproducible next step and evidence limit:
+What is NOT covered / actual residual risk or N/A:
+</code></pre>
+<h2>10. Co má být hotovo (Definition of Done)</h2>
+<ul>
+<li>Existuje jednoznačná výchozí baseline a srozumitelné <code>before</code> chování.</li>
+<li><strong>Dva krokované test cases</strong> se specifikovanými daty a očekáváním <em>před</em> provedením; jeden alespoň skutečně spuštěný na reálné hranici/persistenci, nebo poctivě doložené <code>BLOCKED</code> s reprodukovatelným dalším krokem.</li>
+<li>Jeden věrohodný CR, <strong>vyplněná Impact Matrix</strong> v relevantních oblastech, srozumitelné zdůvodnění <code>NO IMPACT</code>, <strong>Options Matrix</strong> porovnávající reálné reakce.</li>
+<li>Peer-reviewed rozhodnutí a explicitní <code>ACCEPT</code> implementační/testovací handoff, případně plnohodnotné důkazy pro <code>NO_CHANGE/REJECT</code>.</li>
+<li>Odkazy na existující živé dokumenty, evidence a známá omezení.</li>
+</ul>
+</section><section id="section-en" lang="en" class="language"><h2>English</h2><h1>C08 — Controlled Change: from request to decision and verifiable change</h1>
+<h2>1. Why a controlled change does not start by editing code</h2>
+<p>A software change is not just a difference between commits. We need to establish <strong>what was previously accepted</strong>, <strong>what new behavior is requested and why</strong>, <strong>which work products and stakeholders will be affected</strong>, <strong>what feasible responses exist</strong>, <strong>who decides</strong>, and <strong>how we will establish that the new behavior is correct without breaking the old behavior</strong>. Apply this procedure to the existing version of your team's Reservation System.</p>
+<p><strong>The result is a reviewed decision and verification plan.</strong> For an accepted change, precisely specify the implementation scope and regression tests. Continue in the existing project.</p>
+<table>
+<thead>
+<tr>
+  <th>Phase</th>
+  <th>Practical question</th>
+  <th>Concrete artifact</th>
+  <th>Evidence of completion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>0. Freeze <em>before</em></td>
+  <td>Exactly which version will change?</td>
+  <td>Commit, specification, configuration, database, existing tests</td>
+  <td>Another member can restore the same starting state</td>
+</tr>
+<tr>
+  <td>1. Clarify request</td>
+  <td>Who needs what, why, and what counts as acceptance?</td>
+  <td>Change Request (CR) and acceptance conditions</td>
+  <td>No implementation choice is smuggled into the requirement</td>
+</tr>
+<tr>
+  <td>2. Verify existing behavior</td>
+  <td>Which accepted claims must be preserved?</td>
+  <td>Two stepwise test cases, at least one execution</td>
+  <td>Expected is defined before execution, actual is observed</td>
+</tr>
+<tr>
+  <td>3. Analyze impact</td>
+  <td>Which rules, design decisions, data, tests and release assumptions are affected?</td>
+  <td><strong>Impact Matrix</strong> with reasons and links</td>
+  <td>Every affected item has an accountable follow-up</td>
+</tr>
+<tr>
+  <td>4. Compare responses</td>
+  <td>How could this need be met, and at what cost/risk?</td>
+  <td><strong>Options Matrix</strong> with at least two feasible options</td>
+  <td>Comparable criteria and inaction consequences</td>
+</tr>
+<tr>
+  <td>5. Decide and review</td>
+  <td>ACCEPT, REJECT, DEFER or evidenced NO_CHANGE?</td>
+  <td>Peer-reviewed Change Card, owner and conditions</td>
+  <td>Another person can challenge the decision</td>
+</tr>
+<tr>
+  <td>6. Hand over to C09</td>
+  <td>What changes and how will it be verified/released?</td>
+  <td>Delta scope + new and regression test bases</td>
+  <td>C09 need not rediscover the requirements</td>
+</tr>
+</tbody>
+</table>
+<h2>2. A running worked example: pending approval expires</h2>
+<p>This is an <strong>illustrative change</strong>, not a mandatory feature. Your C02 model may already distinguish resources that require approval. Imagine one particular accepted baseline where a pending request can remain open indefinitely. A facility administrator asks: <em>“If a pending approval is not decided within 30 minutes, it must not later be confirmed as a valid booking.”</em></p>
+<ul>
+<li><strong>Previous rule in this example:</strong> a booking remains <code>PENDING_APPROVAL</code>; approval and confirmation must still respect resource availability and the exclusive-resource invariant BR-02: no two overlapping <code>CONFIRMED</code> reservations for the same resource. Actual time semantics must come from your team's specification.</li>
+<li><strong>New CR-08:</strong> after the deadline, a pending reservation cannot transition to <code>CONFIRMED</code>. The team must decide whether an explicit <code>EXPIRED</code> state is used, how the deadline is represented, and what the client observes.</li>
+<li><strong>Regression scope:</strong> <code>Create</code>, <code>Cancel</code>, valid confirmation and permissions must still work; particularly BR-02 must remain true.</li>
+<li><strong>Decision needed:</strong> use a defined server clock and stored UTC time, state the behavior exactly at the 30:00 boundary, handle existing records and repeated/delayed attempts.</li>
+</ul>
+<p>If your system does not have a pending approval flow, do not build one just for this assignment. Choose a credible change to cancellation rules, time granularity, availability or configuration, and apply the same process. Administrative/import/worker paths are <strong>not mandatory new components</strong>.</p>
+<h2>3. Step 0 — identify the before baseline</h2>
+<p>In the existing <code>README.md</code> or <code>docs/evidence-and-evolution.md</code>, record the commit/tag, runtime, reproducible test configuration (no passwords), database schema version and data setup. Link the <strong>accepted</strong> business rule, relevant state view and architecture decision at the correct revision. A PASS result belongs to an actual test execution against an identified baseline; a screenshot from an earlier version is not evidence for the current one.</p>
+<p><strong>Illustrative record:</strong> <code>baseline=3f8a2b1; spec=REQ-03/BR-02@v0.2; schema=003; runtime=Java 21; testDB=isolated; command=./mvnw verify</code>. Replace all technology specifics with your actual stack. Java, Maven and a particular database are not requirements.</p>
+<h2>4. Step 1 — turn the request into verifiable acceptance conditions</h2>
+<p>Record the source, objective, prior behavior, out-of-scope decisions and acceptance conditions <strong>without prematurely demanding</strong> a timer, a scheduler, a microservice or a design pattern.</p>
+<table>
+<thead>
+<tr>
+  <th>Item</th>
+  <th>Fully worked CR-08 entry</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Need and source</td>
+  <td>Facility manager: old undecided requests must no longer become valid bookings</td>
+</tr>
+<tr>
+  <td>Previous behavior</td>
+  <td>PENDING without deadline (for this example only)</td>
+</tr>
+<tr>
+  <td>AC-01 positive</td>
+  <td>Approval before 30 minutes can succeed if all other conditions hold</td>
+</tr>
+<tr>
+  <td>AC-02 negative</td>
+  <td>Approval after the deadline cannot produce CONFIRMED; response/state defined by spec</td>
+</tr>
+<tr>
+  <td>AC-03 boundary</td>
+  <td>The exact <code>createdAt + 30 min</code> instant has explicit expected behavior</td>
+</tr>
+<tr>
+  <td>AC-04 regression</td>
+  <td>BR-02 no-overlapping-CONFIRMED invariant remains enforced</td>
+</tr>
+<tr>
+  <td>Out of scope</td>
+  <td>A mandatory worker, UI redesign, technology replacement — not yet decided</td>
+</tr>
+</tbody>
+</table>
+<p>Separate the <strong>observable contract</strong> from the <strong>implementation mechanism</strong>. “Late requests cannot be confirmed” is a requirement; “run a cron job every minute” is one design option.</p>
+<h2>5. Step 2 — first test the existing baseline</h2>
+<h3>What a reproducible test case contains</h3>
+<p>Each case includes <strong>ID, accepted test basis, exact baseline, preconditions, test data, numbered executable steps, expected per-step and final result, actual observations, evidence, verdict and decision</strong>. Write <code>Expected</code> from the accepted specification <strong>before running the code</strong>. Fill <code>Actual</code> only after execution. <code>NOT RUN</code>, <code>BLOCKED</code>, <code>FAIL</code> and <code>PASS</code> are different states.</p>
+<p>The example assumes exclusive resource <code>R1</code>, half-open intervals <code>[start,end)</code> and business rule BR-02: no two overlapping <code>CONFIRMED</code> bookings for the same resource after commit. Two intervals overlap iff <code>a.start &lt; b.end &amp;&amp; b.start &lt; a.end</code>. Adjacent <code>[10,11)</code> and <code>[11,12)</code> are not overlapping. A capacity-based resource requires the team's separately accepted peak-occupancy oracle, not a blanket exclusion rule.</p>
+<p><strong>TC-C08-01 — positive adjacent bookings.</strong> Preconditions: isolated persistence, <code>B1 CONFIRMED R1 [10:00,11:00)</code> and <code>B2 DRAFT/PENDING R1 [11:00,12:00)</code>, with the accepted approval conditions satisfied.</p>
+<table>
+<thead>
+<tr>
+  <th>#</th>
+  <th>Executable step</th>
+  <th>Expected BEFORE run</th>
+  <th>Actual + evidence AFTER run</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>1</td>
+  <td>Reset isolated store and prepare R1, B1, B2</td>
+  <td>One CONFIRMED; B2 pending</td>
+  <td><em>complete after execution</em></td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>Independently read stored intervals/status</td>
+  <td>Adjacent intervals and no other CONFIRMED conflict</td>
+  <td><em>complete</em></td>
+</tr>
+<tr>
+  <td>3</td>
+  <td>Invoke real Confirm/Approve(B2), including role precondition</td>
+  <td>Operation can succeed under accepted contract</td>
+  <td><em>complete</em></td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>Read authoritative committed state</td>
+  <td>Both CONFIRMED; no overlap</td>
+  <td><em>complete</em></td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>Reset dataset</td>
+  <td>Repeatable initial state</td>
+  <td><em>complete</em></td>
+</tr>
+</tbody>
+</table>
+<p><strong>TC-C08-02 — negative overlapping confirmation.</strong> Preconditions: isolated data, <code>B1 CONFIRMED R1 [10:00,11:00)</code> and <code>B2 DRAFT/PENDING R1 [10:30,11:30)</code>. The example HTTP status 409 is <strong>not mandatory</strong>; use your accepted interface contract.</p>
+<table>
+<thead>
+<tr>
+  <th>#</th>
+  <th>Executable step</th>
+  <th>Expected BEFORE run</th>
+  <th>Actual + evidence AFTER run</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>1</td>
+  <td>Reset and prepare R1, B1, B2</td>
+  <td>Only B1 is CONFIRMED</td>
+  <td><em>complete</em></td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>Independently read initial stored status</td>
+  <td>Overlapping times, but only one confirmed</td>
+  <td><em>complete</em></td>
+</tr>
+<tr>
+  <td>3</td>
+  <td>Invoke actual Confirm/Approve(B2)</td>
+  <td>Rejected as specified</td>
+  <td><em>complete</em></td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>Read actual committed state after transaction</td>
+  <td>B1 unchanged, B2 <strong>not CONFIRMED</strong></td>
+  <td><em>complete</em></td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>Repeat after reset</td>
+  <td>Same reproducible outcome</td>
+  <td><em>complete</em></td>
+</tr>
+</tbody>
+</table>
+<p>Evidence must identify exact commit, command/request, data, observed output, and read the <strong>actual authoritative persisted state</strong>. A successful HTTP response or green mock does not by itself prove the invariant. Parallel competing confirmations require a separate race test. If execution did not occur, say <code>NOT RUN</code>; if prevented by a real obstacle, say <code>BLOCKED</code> with cause, evidence limit and repeatable next action. <strong>C08 requires two designed test cases and at least one actually executed integration/system check</strong>, or a candid evidenced BLOCKED outcome.</p>
+<h2>6. Step 3 — Impact Analysis: follow dependencies down to evidence</h2>
+<p><strong>Impact analysis is not a list of edited filenames.</strong> Trace the new observable claim through responsibilities, interfaces, contracts, persisted data, configuration, tests, release and operation. A file may be affected by the changed contract even if it is not edited. Mark each dimension <code>CHANGE / CHECK / NO IMPACT</code> <strong>with a reason</strong>, links and necessary proof.</p>
+<h3>Worked Impact Matrix for CR-08</h3>
+<table>
+<thead>
+<tr>
+  <th>Dimension</th>
+  <th>Exact impact and reason</th>
+  <th>CHANGE / CHECK / NO IMPACT</th>
+  <th>Action</th>
+  <th>Completion evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Requirements / BR</td>
+  <td>Expiry rule and edge of PENDING state</td>
+  <td>CHANGE</td>
+  <td>Define AC and exact boundary</td>
+  <td>Reviewed specification, test basis</td>
+</tr>
+<tr>
+  <td>State model</td>
+  <td>PENDING → EXPIRED; forbid late Confirm</td>
+  <td>CHANGE</td>
+  <td>Guard and rejected-state semantics</td>
+  <td>Transition/edge tests</td>
+</tr>
+<tr>
+  <td>Architecture</td>
+  <td>Who owns clock decision, who may write status?</td>
+  <td>CHECK</td>
+  <td>Locate authoritative service and actual writer paths</td>
+  <td>Existing C3/ADR link, ownership review</td>
+</tr>
+<tr>
+  <td>Detailed design</td>
+  <td><code>approve()</code> guard, clock dependency, idempotency</td>
+  <td>CHANGE</td>
+  <td>Update unit contract and error behavior</td>
+  <td>Unit/component tests</td>
+</tr>
+<tr>
+  <td>Persistence / data</td>
+  <td>Timestamp interpretation and existing pending rows</td>
+  <td>CHECK</td>
+  <td>Schema/migration and old-record policy</td>
+  <td>Test with preexisting rows</td>
+</tr>
+<tr>
+  <td>API / authorization</td>
+  <td>Client-visible rejection; approving actor</td>
+  <td>CHECK</td>
+  <td>Confirm response and role</td>
+  <td>Positive/negative integration tests</td>
+</tr>
+<tr>
+  <td>Config/deployment</td>
+  <td>TTL parameter, time units, timezone</td>
+  <td>CHECK</td>
+  <td>Document stable default</td>
+  <td>Reproducible configuration smoke</td>
+</tr>
+<tr>
+  <td>Tests/evidence</td>
+  <td>Existing Confirm/BR-02 and new deadline boundary</td>
+  <td>CHANGE</td>
+  <td>Regression + independent new oracle</td>
+  <td>Executed expected/actual</td>
+</tr>
+<tr>
+  <td>Release/recovery</td>
+  <td>New interpretation of existing pending records</td>
+  <td>CHECK</td>
+  <td>Compatibility/rollback constraints</td>
+  <td>Identified release record</td>
+</tr>
+<tr>
+  <td>Operations</td>
+  <td>Pending requests may appear expired</td>
+  <td>CHECK</td>
+  <td>Define observable user/admin status</td>
+  <td>Acceptance or declared limitation</td>
+</tr>
+</tbody>
+</table>
+<p>If an administrative/import/worker writer does not exist, record <code>NO IMPACT: this path does not exist</code>. Do not ignore a real direct-SQL writer: a properly enabled and scoped database constraint can constrain it too, whereas an API-only guard does not automatically protect every existing writer. Do not implement fake paths for class demonstration.</p>
+<h3>How to traverse the real system</h3>
+<ol>
+<li>Start from the <strong>accepted claim</strong> (e.g., AC-02 forbids late approval).</li>
+<li>Find the <strong>actual owner</strong> of that decision in the current architecture.</li>
+<li>Trace the <strong>call chain and data writes</strong> to persistence and real consumers.</li>
+<li>For affected interfaces, identify <strong>callers, contracts and test cases</strong>.</li>
+<li>Distinguish <strong>contract edits</strong> from components that only need a regression check.</li>
+<li>Inspect <strong>configuration, migrations and recovery</strong> when applicable.</li>
+<li>Link an expected <strong>completion proof</strong> for every actual impact; justify <code>N/A</code>.</li>
+</ol>
+<h2>7. Step 4 — Alternative Analysis: compare feasible responses</h2>
+<p>Compare at least <strong>two genuinely feasible responses</strong>; a no-code response is legitimate when it solves the actual need. Evaluate accepted conditions, implementation scope, resources, data/deployment complexity, failure paths, reversibility and evidence. Do not invent pseudo-precise numeric scores.</p>
+<table>
+<thead>
+<tr>
+  <th>Option</th>
+  <th>How it works</th>
+  <th>Benefit</th>
+  <th>Cost/failure/rollback</th>
+  <th>Verification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><strong>A: lazy expiry on approve</strong></td>
+  <td>Authoritative Confirm checks deadline, rejects and persists EXPIRED</td>
+  <td>Small change; no worker</td>
+  <td>PENDING remains visible until touched; requires clock semantics</td>
+  <td>Before/at/after deadline, BR-02 regression</td>
+</tr>
+<tr>
+  <td><strong>B: scheduler plus guard</strong></td>
+  <td>Background job marks expiry; Confirm also validates deadline</td>
+  <td>Pending queue updated proactively</td>
+  <td>Retry, scheduler failure, races and observability</td>
+  <td>Worker retry/late commit, persisted status, restart</td>
+</tr>
+<tr>
+  <td><strong>C: no automatic expiry</strong></td>
+  <td>Clearer queue plus manual escalation</td>
+  <td>Small code impact</td>
+  <td>Does not fully satisfy AC-02; stakeholder decision needed</td>
+  <td>Demonstrated manual process and accepted limitation</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Illustrative decision:</strong> choose A only if the stakeholder accepts that expiry becomes visible on interaction and no proactive removal is promised. If the accepted need requires automatic transition even with no user interaction, A is insufficient and B is more suitable. The correct answer depends on the <strong>agreed observable contract</strong>, not technology fashion.</p>
+<h2>8. Step 5 — reviewed decision and C09 hand-off</h2>
+<p>Document <code>ACCEPT / REJECT / DEFER / NO_CHANGE</code> with rationale, owner and peer reviewer. <code>DEFER</code> has a specific missing input and next-decision condition. <code>REJECT/NO_CHANGE</code> must address a credible need, cite a consequential adverse impact, provide a feasible alternative or compensating response and an independent reproducible check of the preserved baseline; inventing an absurd request to reject is not enough. For <code>ACCEPT</code>, specify the smallest bounded delta and new/regression test oracles for C09.</p>
+<table>
+<thead>
+<tr>
+  <th>Hand-off item</th>
+  <th>Example, option A</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Before</td>
+  <td>commit <code>3f8a2b1</code>, BR-02, recorded TC-C08-01/02 execution</td>
+</tr>
+<tr>
+  <td>Accepted change</td>
+  <td>CR-08: late approval rejected; attempt persists EXPIRED</td>
+</tr>
+<tr>
+  <td>Bounded delta</td>
+  <td>Guard in current owner, persisted status, rejection contract</td>
+</tr>
+<tr>
+  <td>New oracle</td>
+  <td>Approve at 29:59 allowed; 30:00 exact semantics; 30:01 rejected</td>
+</tr>
+<tr>
+  <td>Regression</td>
+  <td>TC-C08-01/02, actual affected Cancel and role cases</td>
+</tr>
+<tr>
+  <td>Technical risk</td>
+  <td>Approval/expiry race, not yet verified</td>
+</tr>
+<tr>
+  <td>C09 work</td>
+  <td>Implementation PR, integration execution, clean checkout, CI/build, release decision</td>
+</tr>
+</tbody>
+</table>
+<p>Be accurate about states: <code>PLANNED</code> ≠ <code>IMPLEMENTED</code> ≠ <code>VERIFIED</code>. A plan alone does not prove a reduction in actual residual risk. An observed failing test is valuable if its contradiction and owner decision are recorded.</p>
+<h2>9. Templates for the existing repository, not a new report</h2>
+<p>Keep CR, impact, options and decision in <code>docs/intent-and-change.md</code>; test cases and observations in <code>docs/evidence-and-evolution.md</code>; runtime instructions in <code>README.md</code>. Copy only relevant sections into those <strong>existing living artifacts</strong>.</p>
+<h3>Copyable Change Request / Impact / Decision</h3>
+<pre><code class="language-md">## C08 / CR-___ — Controlled Change Card
+Change source and concrete project need:
+Before commit/tag, accepted spec/BR/ADR, schema and config:
+Previous observable behavior / limitation:
+New intended behavior, scope and explicit out-of-scope:
+Acceptance conditions AC-01 ... (positive/negative/boundary):
+Impact analysis method and exact inspected artifacts:
+| Dimension / exact location | CHANGE/CHECK/NO IMPACT and why | Action/check | Owner/evidence |
+|---|---|---|---|
+| Accepted spec/BR/state | | | |
+| Architecture/owner/interfaces | | | |
+| Detailed design/code | | | |
+| Data/schema/migration | | | |
+| Config/CI/release | | | |
+| Tests/integration/risk | | | |
+| Operations/recovery | | | |
+Feasible alternatives with common criteria:
+| Option | Meets AC? | Benefits | Cost/failure/recovery | How to verify |
+|---|---|---|---|---|
+| A | | | | |
+| B | | | | |
+Consequence of inaction / feasible alternative:
+Peer reviewer and challenged assumption:
+Decision ACCEPT/REJECT/DEFER/NO_CHANGE, owner, date, rationale:
+If ACCEPT: bounded C09 delta and new/regression test oracles:
+If NO_CHANGE/REJECT: independent current-baseline check and response:
+Open uncertainty / monitoring or next decision trigger:
+</code></pre>
+<h3>Copyable test case and execution record</h3>
+<pre><code class="language-md">## C08 / TC-___ — test name
+Accepted test basis/rule and revision, actual risk ID or N/A:
+Baseline commit, DB schema, runtime, data setup and command:
+Preconditions, roles and exact initial persisted state:
+Test data including intervals and timezones:
+| # | Action/input | Expected BEFORE execution | Actual AFTER execution | Evidence |
+|---|---|---|---|---|
+| 1 | | | | |
+| 2 | | | | |
+| 3 | | | | |
+| 4 | | | | |
+Final postcondition / independently read committed-state oracle:
+Verdict PASS/FAIL/BLOCKED/NOT RUN with supporting observation:
+If FAIL: contradicted claim and defect/issue:
+If BLOCKED: exact obstacle, reproducible next step and evidence limit:
+What remains untested / actual residual exposure or N/A:
+</code></pre>
+<h2>10. Definition of Done</h2>
+<ul>
+<li>The exact before baseline and its <strong>accepted behavior</strong> are identified.</li>
+<li><strong>Two reproducible stepwise test cases</strong>, with precise data and expectations authored <em>before execution</em>; at least one actually executed through a relevant real interface/persistence, or an honest evidenced BLOCKED result with repeatable next action.</li>
+<li>One credible CR; a completed <strong>Impact Matrix</strong> for the relevant dimensions with justified <code>NO IMPACT</code>, and an <strong>Options Matrix</strong> comparing feasible responses.</li>
+<li>A peer-reviewed decision with concrete implementation/verification hand-off for ACCEPT, or a fully supported REJECT/NO_CHANGE.</li>
+<li>Links live in the <strong>existing repository</strong>, with known limitations.</li>
+</ul>
+</section></main>
+
+<script>
+(()=>{let cz=document.querySelector('#section-cs'),en=document.querySelector('#section-en'),bcz=document.querySelector('#lang-cs'),ben=document.querySelector('#lang-en');
+function setLanguage(which){let iscz=which==='cs';cz.hidden=!iscz;en.hidden=iscz;bcz.setAttribute('aria-pressed',String(iscz));ben.setAttribute('aria-pressed',String(!iscz));document.documentElement.lang=which;}
+bcz.addEventListener('click',()=>setLanguage('cs'));ben.addEventListener('click',()=>setLanguage('en'));
+for(let table of document.querySelectorAll('table')){let box=document.createElement('div');box.className='table-wrap';table.parentNode.insertBefore(box,table);box.appendChild(table);}
+for(let pre of document.querySelectorAll('pre')){let bar=document.createElement('div');bar.className='copybar';let btn=document.createElement('button');btn.type='button';btn.textContent=pre.closest('section').lang==='cs'?'Kopírovat šablonu':'Copy template';btn.addEventListener('click',async()=>{let code=pre.querySelector('code')?.textContent??pre.textContent;try{if(!navigator.clipboard?.writeText)throw new Error('clipboard unavailable');await navigator.clipboard.writeText(code);btn.textContent=pre.closest('section').lang==='cs'?'Zkopírováno':'Copied';}catch(e){document.querySelector('#manual-copy-dialog')?.remove();let dialog=document.createElement('div');dialog.id='manual-copy-dialog';dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.style.cssText='position:fixed;inset:0;background:#14283dcc;display:flex;justify-content:center;align-items:center;z-index:999;padding:1rem';let inner=document.createElement('div');inner.style.cssText='background:white;padding:1.2rem;border-radius:12px;width:min(720px,95vw);max-height:90vh;display:flex;flex-direction:column;gap:.6rem';let label=document.createElement('strong');label.textContent=pre.closest('section').lang==='cs'?'Vyberte text (Ctrl+C) a potom zavřete':'Select text (Ctrl+C), then close';let t=document.createElement('textarea');t.value=code;t.style.cssText='width:100%;height:min(55vh,380px);font:14px monospace';let close=document.createElement('button');close.type='button';close.textContent=pre.closest('section').lang==='cs'?'Zavřít':'Close';close.addEventListener('click',()=>dialog.remove());inner.append(label,t,close);dialog.append(inner);document.body.append(dialog);t.focus();t.select();let escape=(ev)=>{if(ev.key==='Escape'){dialog.remove();document.removeEventListener('keydown',escape)}};document.addEventListener('keydown',escape);btn.textContent=pre.closest('section').lang==='cs'?'Ruční kopírování':'Manual copy';}});bar.append(btn);pre.before(bar);}
+setLanguage('cs');})();
+</script></body></html>
