@@ -187,3 +187,42 @@ $c08Exit
 ```
 
 Výstup uvádí pro každý případ HTTP odpověď, skutečné čekání v PostgreSQL a stav rezervace a outboxu po dokončení. Návratový kód čtěte spolu s vypsanými `caseId` a `verdict`. Kód `0` s dvěma výsledky `PASS` znamená dva průchody. Kód `1` s výsledkem `FAIL` znamená nesoulad. Na výchozí verzi očekávejte `TC-C08-01 PASS` a `TC-C08-02 FAIL`, protože druhý případ reprodukuje F1. Kód `2` nebo ukončení před vypsáním některého verdiktu je překážka při provedení. Do evidence uveďte příčinu a případ bez verdiktu označte `BLOCKED`. Každé opakování použije novou prázdnou testovací DB.
+
+## C09 Ověření z čistého checkoutu
+
+Stáhněte repozitář do nového adresáře a přepněte se na přesný kandidát uvedený v [evidenci C09](docs/evidence-and-evolution.md#c09--integrace-a-kandidát-na-vydání). Použijte Node.js 22.14.0 a lokální PostgreSQL 17.11. Nástroje `initdb`, `pg_ctl` a `createdb` musí být na PATH.
+
+V PowerShellu z kořene checkoutu spusťte následující postup. Port nastavte podle dostupnosti. Kontrola vyžaduje novou prázdnou databázi `swi_c08_f1` s rolí `swi_c08`. Schéma se vytvoří ze zdrojů kandidáta. Ověřovací sady v této databázi mažou testovací rezervace a outbox.
+
+```powershell
+npm.cmd ci
+if ($LASTEXITCODE -ne 0) { throw "Instalace závislostí selhala." }
+$c09Data = Join-Path $env:TEMP ("swi-c09-" + [guid]::NewGuid().ToString("N"))
+$c09DbPort = 55439
+initdb -D $c09Data -U swi_c08 --auth=trust --encoding=UTF8 --no-locale
+if ($LASTEXITCODE -ne 0) { throw "Inicializace testovací DB selhala." }
+pg_ctl -D $c09Data -l "$c09Data/server.log" -o "-h 127.0.0.1 -p $c09DbPort" -w start
+if ($LASTEXITCODE -ne 0) { throw "Start testovací DB selhal." }
+try {
+    createdb -h 127.0.0.1 -p $c09DbPort -U swi_c08 swi_c08_f1
+    if ($LASTEXITCODE -ne 0) { throw "Vytvoření testovací DB selhalo." }
+    npm.cmd run check:c09 -- $c09DbPort
+    if ($LASTEXITCODE -ne 0) { throw "Ověření C09 selhalo." }
+
+    $env:DATABASE_URL = ''
+    $env:DB_HOST = '127.0.0.1'
+    $env:DB_PORT = "$c09DbPort"
+    $env:DB_USER = 'swi_c08'
+    $env:DB_PASSWORD = ''
+    $env:DB_NAME = 'swi_c08_f1'
+    $env:DB_SSL = 'false'
+    $env:PORT = '3000'
+    npm.cmd start
+} finally {
+    pg_ctl -D $c09Data -m fast -w stop
+}
+```
+
+Po startu ověřte z druhého terminálu `Invoke-RestMethod http://127.0.0.1:3000/api` a `Invoke-RestMethod http://127.0.0.1:3000/api/hamsters`. První má vrátit `status: ok`, druhý katalog křečků z databáze. Server ukončíte pomocí Ctrl+C.
+
+Příkaz `check:c09` spouští původní případy C08, build, unit a architektonické testy, původní integrační regrese a nové testy rozhodného času. Stejný příkaz používá [GitHub Actions](.github/workflows/c09.yml) s vlastní PostgreSQL. Po vlastní kontrole doplňte do evidence C09 jméno, commit, prostředí, výsledky testů a smoke checku a případné překážky.

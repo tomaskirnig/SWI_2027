@@ -661,7 +661,7 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant Notif as Notification Integration (stub)
     Student->>API: POST /api/reservations/:id/confirm
-    API->>Svc: confirmReservation(id, userId, now)
+    API->>Svc: confirmReservation(id, userId, timeOverride?)
     Svc->>Repo: withTransaction(callback)
     Repo->>DB: BEGIN
     Note over Svc,Repo: Následuje tělo callbacku se stejným klientem
@@ -673,6 +673,7 @@ sequenceDiagram
     Svc->>Repo: findActiveReservationsForHamster(client, hamsterId, id)
     Svc->>Repo: findUserReservationsForHamster(client, userId, hamsterId, id)
     Svc->>Svc: sestavit mapu minut po pražských dnech
+    Svc->>Svc: určit rozhodný čas po čekání a načtení podkladů
     Svc->>Policy: evaluate(candidate, hamster, slots, minutes, now)
     alt Neplatná podmínka
         Policy-->>Svc: ok=false, code, message
@@ -694,6 +695,8 @@ sequenceDiagram
     end
 ```
 
+Bez časového override odečítá Confirm systémové hodiny až po získání zámků a načtení podkladů. U Decide následuje odečet po získání zámků rezervace i křečka. U nového Cancel následuje po zámku rezervace a kontrole stavu. Opakovaný Cancel vlastní již zrušené rezervace vrací úspěch před kontrolou času. Explicitní čas z existujícího testovacího vstupu se používá při ověření přesných hranic. Podrobnosti a ověření jsou v [evidenci C09](evidence-and-evolution.md#c09--integrace-a-kandidát-na-vydání).
+
 Neexistující rezervace/křeček a cizí vlastník se odmítají samostatně 404/403. Selhání simulovaného odesílače probíhá až po COMMIT a změnu rezervace nevrací zpět.
 
 # Část H2: Zaměřený návrhový třídní / modulový pohled
@@ -702,9 +705,9 @@ Neexistující rezervace/křeček a cizí vlastník se odmítají samostatně 40
 classDiagram
     class ReservationOperations {
         <<module>>
-        +confirmReservation(id, userId, now)
-        +cancelReservation(id, userId, now)
-        +decideReservation(id, role, decision, now)
+        +confirmReservation(id, userId, timeOverride?)
+        +cancelReservation(id, userId, timeOverride?)
+        +decideReservation(id, role, decision, timeOverride?)
         +expirePendingReservations(now)
     }
     class IReservationRepository {
@@ -816,7 +819,7 @@ evaluate(candidate: ConfirmationCandidate, hamster: HamsterProfile,
          userDailyMinutes: Map<string, number>, currentTime: Date): ConfirmationResult;
 ```
 
-**Preconditions:** služba ověřila reference a vlastníka; vstupní sloty zahrnují CONFIRMED i PENDING_APPROVAL stejného křečka bez kandidáta. Mapa minut zahrnuje stejnou dvojici student–křeček bez kandidáta. `currentTime` je platný referenční čas. Platnost intervalu a stav DRAFT ověřuje sama policy.
+**Preconditions:** služba ověřila reference a vlastníka; vstupní sloty zahrnují CONFIRMED i PENDING_APPROVAL stejného křečka bez kandidáta. Mapa minut zahrnuje stejnou dvojici student–křeček bez kandidáta. `currentTime` je platný čas rozhodnutí, který služba určí po získání potřebných zámků a načtení vstupů. Platnost intervalu a stav DRAFT ověřuje sama policy.
 
 **Postconditions:** při splnění pravidel `{ok:true, targetStatus, message}`, jinak `{ok:false, code, message, details?}`. Policy nic neukládá, nemění vstupy ani stav rezervace. Garantuje rozhodnutí nad předanými daty; jejich aktuálnost při zápisu zajišťují zámky služby/repository.
 
@@ -828,7 +831,7 @@ evaluate(candidate: ConfirmationCandidate, hamster: HamsterProfile,
 classDiagram
     class ReservationManagement {
         <<module>>
-        +confirmReservation(id, userId, now)
+        +confirmReservation(id, userId, timeOverride?)
     }
     class IConfirmationPolicy {
         <<interface>>
@@ -858,6 +861,7 @@ sequenceDiagram
     participant Repo as IReservationRepository
     participant Policy as ConfirmationPolicy
     Svc->>Repo: withTransaction: zamknout rezervaci a křečka, načíst sloty a minuty
+    Svc->>Svc: určit rozhodný čas po čekání a načtení podkladů
     Svc->>Policy: evaluate(candidate, hamster, slots, minutes, now)
     Policy->>Policy: isIntervalValid a isAtLeast15MinBefore
     Policy->>Policy: aktivita a stav DRAFT
