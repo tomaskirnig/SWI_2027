@@ -1,0 +1,476 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SWI L03 Architecture v13</title>
+<style>
+:root{--bg:#f7f8fb;--ink:#172033;--line:#d8dfea;--accent:#2859d6;--soft:#eaf0ff;--paper:#fff;--muted:#647084}
+*{box-sizing:border-box}body{margin:0;background:#111;font-family:Inter,Segoe UI,Arial,sans-serif;color:var(--ink);overflow:hidden}
+.slide{display:none;width:100vw;height:56.25vw;max-width:177.78vh;max-height:100vh;margin:auto;background:var(--bg);padding:2.35% 3.2%;position:relative}
+.slide.active{display:block}.top{font-size:1.05vw;color:var(--muted);border-bottom:1px solid var(--line);padding-bottom:.46vw;display:flex;justify-content:space-between}
+h1{font-size:2.65vw;line-height:1.06;margin:.82vw 0 .72vw;letter-spacing:-.018em}
+.main{background:var(--accent);color:white;border-radius:.7vw;padding:.85vw 1vw;font-size:1.48vw;line-height:1.26;font-weight:750}
+.cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.7vw;margin-top:.75vw}
+.cols div{background:white;border:1px solid var(--line);border-radius:.65vw;padding:.7vw .8vw;min-height:8.2vw}
+h2{font-size:1.08vw;line-height:1.1;margin:0 0 .42vw;color:var(--accent)}
+p{font-size:1.08vw;line-height:1.32;margin:0}
+.sketch{background:#eef3fb;border:1px solid var(--line);border-radius:.75vw;margin-top:.75vw;padding:.78vw;min-height:7.2vw;display:flex;align-items:center;justify-content:center}
+.sketch pre{white-space:pre-wrap;text-align:center;margin:0;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:1.15vw;line-height:1.42;color:#1a2a44}
+details{position:absolute;left:3.2%;right:3.2%;bottom:.8vw;background:white;border:1px solid var(--line);border-radius:.5vw;padding:.36vw .6vw;font-size:.88vw;line-height:1.24}
+summary{cursor:pointer;color:var(--accent);font-weight:700}details p{font-size:.82vw;margin:.35vw 0 0;color:#344054}
+@media(max-aspect-ratio:16/9){.slide{width:177.78vh;height:100vh}}
+</style>
+<script>
+let c=0;function show(n){const s=[...document.querySelectorAll('.slide')];c=(n+s.length)%s.length;s.forEach((x,i)=>x.classList.toggle('active',i===c));}
+addEventListener('keydown',e=>{if(['ArrowRight','PageDown',' ','Enter'].includes(e.key))show(c+1);if(['ArrowLeft','PageUp','Backspace'].includes(e.key))show(c-1);if(e.key==='Home')show(0);if(e.key==='End')show(document.querySelectorAll('.slide').length-1);});
+addEventListener('load',()=>show(0));
+</script></head><body>
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>1/32</span></div>
+<h1>L03 — Software Architecture</h1>
+<div class="main">Architecture is the discipline of making consequential structural decisions so important system claims remain true under execution, failure and change.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>A useful architecture is not “a diagram of components”. It is a justified allocation of responsibility, state, boundaries, interactions and runtime constraints. The diagram is only the visible form of the decision.</p></div>
+  <div><h2>Use in practice</h2><p>Read every architectural model as an argument: this structure exists because this claim, risk, quality concern or expected change must be handled.</p></div>
+  <div><h2>Concrete example</h2><p>Claim: two conflicting reservations must not both become CONFIRMED. This claim will force decisions about lifecycle ownership, conflict evaluation and consistency boundary.</p></div>
+</div>
+<div class="sketch"><pre>CLAIM → RESPONSIBILITY → BOUNDARY → DECISION → EVIDENCE</pre></div>
+<details><summary>Detailed notes</summary><p>The lecture remains case-led. Concepts appear when the Reservation case needs them. The aim is not to memorize architecture vocabulary, but to learn the reasoning behind structure.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>2/32</span></div>
+<h1>Architecture in this course</h1>
+<div class="main">The course does not teach lifecycle labels as the main content. It teaches the engineering depth inside activities that every serious lifecycle must perform.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>Scrum, Kanban, staged development, ASPICE-like process models or continuous delivery organize work differently. They do not remove the need to specify behavior, allocate responsibilities, evaluate quality, design implementation, verify and control change.</p></div>
+  <div><h2>Use in practice</h2><p>For each topic ask: what decision must be made, what artifact/code/evidence supports it, and what consequence follows?</p></div>
+  <div><h2>Concrete example</h2><p>L03 asks: we know what the system must do; how must the software be structured so that the claims survive realistic execution?</p></div>
+</div>
+<div class="sketch"><pre>SPECIFICATION → ARCHITECTURE → QUALITY → DETAILED DESIGN → VERIFICATION → CHANGE</pre></div>
+<details><summary>Detailed notes</summary><p>This keeps architecture connected to the overall subject. The purpose is not to discuss “Waterfall vs Agile”, but to show what an engineer must be able to do in either setting.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>3/32</span></div>
+<h1>Start from claims, not boxes</h1>
+<div class="main">A structural model is meaningful only when it protects or explains a concrete system claim.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>Without claims, a component diagram can look professional but cannot be evaluated. With claims, every boundary and dependency can be challenged: does it help preserve the claim under change, failure or runtime stress?</p></div>
+  <div><h2>Use in practice</h2><p>Collect functional rules, invariants, constraints, quality concerns, external dependencies and expected changes. Convert them into architecture questions.</p></div>
+  <div><h2>Concrete example</h2><p>Invariant: no two CONFIRMED reservations may overlap the same exclusive Resource. Architecture question: where is the authoritative decision that enforces this?</p></div>
+</div>
+<div class="sketch"><pre>Requirement / invariant / constraint
+        ↓
+Architecture question
+        ↓
+Structure with reason</pre></div>
+<details><summary>Detailed notes</summary><p>The word “claim” is deliberately broad. It includes requirements, business rules, safety/security assumptions, quality scenarios and constraints.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>4/32</span></div>
+<h1>Running case: Reservation System</h1>
+<div class="main">A small reservation system is enough to expose real architecture forces: state, concurrency, external integration, delayed workflow, quality and change.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>The domain is intentionally simple so attention stays on architecture reasoning. The same reasoning transfers to appointments, machines, labs, charging slots, vehicle service, hospital rooms or manufacturing resources.</p></div>
+  <div><h2>Use in practice</h2><p>Use the same case repeatedly. Do not restart reasoning from a new example for every concept; evolve the architecture as new pressure appears.</p></div>
+  <div><h2>Concrete example</h2><p>Core operations: Create, Check Availability, Confirm, Cancel. Later change: some resources require delayed Approval.</p></div>
+</div>
+<div class="sketch"><pre>Reservation · Resource · TimeInterval · User · Approval</pre></div>
+<details><summary>Detailed notes</summary><p>The case is not an exercise dependency; it is a worked example for architectural thinking.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>5/32</span></div>
+<h1>A working implementation is not yet architecture</h1>
+<div class="main">Controller → Service → Repository may run successfully and still leave ownership, consistency and failure semantics undefined.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>Happy-path functionality proves that one scenario works in one controlled run. It does not prove that the system has stable boundaries or that its rules remain true under concurrency, failure or future change.</p></div>
+  <div><h2>Use in practice</h2><p>Treat the first implementation as AS-IS evidence. Ask what it actually guarantees and which decisions are merely implicit.</p></div>
+  <div><h2>Concrete example</h2><p>One request: load Reservation → check no conflict → set CONFIRMED → save. It works in a demo, but the invariant has not yet been stress-tested.</p></div>
+</div>
+<div class="sketch"><pre>Controller → Service → Repository
+(happy path passes)</pre></div>
+<details><summary>Detailed notes</summary><p>This is not criticism of simple architecture. Simple is good when it is justified. The problem is unexamined simplicity.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>6/32</span></div>
+<h1>Concurrency reveals the first architectural problem</h1>
+<div class="main">A correct sequential scenario can violate a business invariant when two executions interleave.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>If the check and the update are not protected by a suitable consistency boundary, two requests may both observe “no conflict” and then both commit. The code can look locally correct and still produce invalid system state.</p></div>
+  <div><h2>Use in practice</h2><p>Attack important scenarios with runtime conditions: concurrency, partial failure, delayed response, restart and changed external state.</p></div>
+  <div><h2>Concrete example</h2><p>A checks: no conflict. B checks: no conflict. A saves CONFIRMED. B saves CONFIRMED. The no-overlap invariant is broken.</p></div>
+</div>
+<div class="sketch"><pre>A: check → none        B: check → none
+A: save CONFIRMED    B: save CONFIRMED
+✕ invariant violated</pre></div>
+<details><summary>Detailed notes</summary><p>This slide turns architecture from drawing into correctness reasoning. It explains why architecture must include runtime behavior.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>7/32</span></div>
+<h1>Driver means pressure, not mechanism</h1>
+<div class="main">The architecture driver is the reason the architecture must respond; transaction, event bus or microservice are possible responses, not the reason itself.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>Premature solution names hide the real engineering question. A driver should make clear what could go wrong or what must be supported if the architecture ignores it.</p></div>
+  <div><h2>Use in practice</h2><p>Write drivers as: evidence → why it matters → architecture question. Leave mechanisms undecided until alternatives are compared.</p></div>
+  <div><h2>Concrete example</h2><p>Evidence: concurrent confirmations can race. Question: where is the authoritative confirmation decision? Mechanisms still open: transaction, DB constraint, optimistic locking, serialization.</p></div>
+</div>
+<div class="sketch"><pre>Evidence → impact → architecture question → candidate mechanisms later</pre></div>
+<details><summary>Detailed notes</summary><p>In automotive/security/safety language this resembles separating a risk/control need from the technical implementation of the control.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>8/32</span></div>
+<h1>Responsibilities before components</h1>
+<div class="main">Before naming components, identify the decisions, state and rules that somebody must own.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>Mapping one use case to one service often duplicates business decisions. Architecture should first discover responsibilities that cut across scenarios and must remain consistent.</p></div>
+  <div><h2>Use in practice</h2><p>For one important scenario, list what must be decided, what state must be changed, what rule must hold and what result must be persisted or communicated.</p></div>
+  <div><h2>Concrete example</h2><p>Confirm Reservation: accept command, load state, validate lifecycle, evaluate conflicts, preserve invariant, change state, persist result, report outcome.</p></div>
+</div>
+<div class="sketch"><pre>Scenario + rules
+   ↓
+Responsibilities
+   ↓
+Allocation to elements</pre></div>
+<details><summary>Detailed notes</summary><p>Responsibility analysis is the bridge between requirements and structure. It is not yet a component diagram.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>9/32</span></div>
+<h1>Boundaries must localize a reason</h1>
+<div class="main">A boundary is useful when it localizes responsibility, state, policy, failure, trust, ownership or expected change.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>Adding boundaries increases indirection and can increase operational complexity. Removing boundaries can spread decisions and make change unsafe. The value comes from the reason localized by the boundary.</p></div>
+  <div><h2>Use in practice</h2><p>For every boundary, be able to say: this boundary exists to localize ___ . If the blank cannot be filled, the boundary may be decorative.</p></div>
+  <div><h2>Concrete example</h2><p>Notification Integration exists to isolate external API failure and vendor SDK change from Reservation business logic.</p></div>
+</div>
+<div class="sketch"><pre>Boundary localizes:
+responsibility · state · policy · failure · trust · change</pre></div>
+<details><summary>Detailed notes</summary><p>This is applicable far beyond reservation systems: automotive ECUs, cloud services, enterprise apps and embedded systems all need meaningful boundaries.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>10/32</span></div>
+<h1>Structural level L0: Context</h1>
+<div class="main">The context view answers what is inside the system and what is outside its control boundary.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>Many architecture errors begin when an external system is treated as if it were internal, or when the application delegates a decision that it should own.</p></div>
+  <div><h2>Use in practice</h2><p>Draw the system as one box. Add only external actors/systems. Label what crosses the boundary. Do not add internal components here.</p></div>
+  <div><h2>Concrete example</h2><p>User/Approver sends commands. IdP provides identity claims. Notification Service receives notification requests. The application still owns authorization policy.</p></div>
+</div>
+<div class="sketch"><pre>User / Approver → [Reservation System] → IdP
+[Reservation System] → Notification Service</pre></div>
+<details><summary>Detailed notes</summary><p>Context is L0 because it deliberately hides internal structure. Its purpose is boundary and external dependency clarity.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>11/32</span></div>
+<h1>Structural level L1: Logical architecture</h1>
+<div class="main">The logical architecture view answers where major responsibilities, state ownership and allowed dependencies live.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>This is the first structural model that says how the system is organized. It is still independent of deployment: a logical element may be a module today and a service later.</p></div>
+  <div><h2>Use in practice</h2><p>Use 3–8 logical elements. For each element show name, responsibility, owned state/rule if any, and important dependencies.</p></div>
+  <div><h2>Concrete example</h2><p>Reservation Management owns lifecycle. Availability evaluates conflicts. Approval Workflow owns approval state. Notification Integration owns external notification boundary.</p></div>
+</div>
+<div class="sketch"><pre>Reservation Management → Availability
+Reservation Management → Persistence
+Reservation Management → Notification Integration</pre></div>
+<details><summary>Detailed notes</summary><p>This is the central static architecture model. It should not be a folder tree and should not already imply deployment unless runtime is the question.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>12/32</span></div>
+<h1>Structural level L2: Modules, interfaces, adapters</h1>
+<div class="main">L2 refines L1 boundaries into interfaces and adapters where a dependency or external boundary needs explicit control.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>Not every dependency deserves an interface. Interfaces are introduced when variation, testing, failure isolation, ownership or technology boundary makes the dependency significant.</p></div>
+  <div><h2>Use in practice</h2><p>Use L2 when you need to show ports/adapters, repository interfaces, external SDK isolation, anti-corruption layers or dependency direction rules.</p></div>
+  <div><h2>Concrete example</h2><p>NotificationPort is used by Reservation Management. NotificationAdapter implements it and is the only element that knows the vendor Notification API.</p></div>
+</div>
+<div class="sketch"><pre>Reservation Management → NotificationPort
+NotificationAdapter → Vendor Notification API</pre></div>
+<details><summary>Detailed notes</summary><p>This level connects architecture to implementable constraints without descending into all classes.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>13/32</span></div>
+<h1>Structural level L3: Focused design classes</h1>
+<div class="main">A class view belongs in architecture only when it clarifies ownership or collaboration that has architectural consequence.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>A complete dump of classes is rarely useful. A focused class view is useful when it shows which class/interface owns a rule, policy, transition or collaboration needed by the architecture.</p></div>
+  <div><h2>Use in practice</h2><p>Use 4–10 classes/interfaces tied to one scenario. Show only operations and relationships needed to explain responsibility and interaction.</p></div>
+  <div><h2>Concrete example</h2><p>Reservation, TimeInterval, AvailabilityPolicy, ReservationRepository, ReservationApplication. The view explains who owns confirm() and conflict evaluation.</p></div>
+</div>
+<div class="sketch"><pre>ReservationApplication → Reservation
+ReservationApplication → AvailabilityPolicy
+ReservationRepository &lt;&lt;interface&gt;&gt;</pre></div>
+<details><summary>Detailed notes</summary><p>This is the handoff edge to Detailed Design. Detailed design later expands local class structure, cohesion/coupling and patterns.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>14/32</span></div>
+<h1>Domain view: problem structure, not software structure</h1>
+<div class="main">The domain view captures business concepts and rules that the architecture must respect, but it is not automatically the software design.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>Using the same nouns in domain and code can mislead. A domain concept may become an entity, value object, policy, database constraint or just part of an interface contract.</p></div>
+  <div><h2>Use in practice</h2><p>Model concepts, relationships, multiplicities and important rules. Keep controllers, repositories, HTTP clients and frameworks out.</p></div>
+  <div><h2>Concrete example</h2><p>Reservation has TimeInterval and Resource. Resource can be exclusive or capacity-based. Approval may be associated with Reservation.</p></div>
+</div>
+<div class="sketch"><pre>User 1 — * Reservation
+Reservation 1 — 1 TimeInterval
+Resource 1 — * Reservation
+Reservation 0..1 — 1 Approval</pre></div>
+<details><summary>Detailed notes</summary><p>The domain view is often needed before structural allocation so that software boundaries do not erase business meaning.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>15/32</span></div>
+<h1>State view: lifecycle + transition ownership</h1>
+<div class="main">A statechart shows legal states; architecture must add who owns the decision to move between them.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>A lifecycle diagram alone does not protect behavior. If controllers, services and adapters can all change state, the diagram is documentation but not authority.</p></div>
+  <div><h2>Use in practice</h2><p>Use a statechart plus ownership table: transition → decision owner → who may request it → where it is persisted.</p></div>
+  <div><h2>Concrete example</h2><p>PENDING_APPROVAL → CONFIRMED may be requested by Approver, decided by Approval Workflow or Reservation Management, and stored in Reservation state.</p></div>
+</div>
+<div class="sketch"><pre>DRAFT → PENDING_APPROVAL → CONFIRMED
+             ↘ REJECTED / EXPIRED / CANCELLED
+Transition owner table required</pre></div>
+<details><summary>Detailed notes</summary><p>This is a common gap in student and professional architecture documents: states are named, but ownership of transitions is not defined.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>16/32</span></div>
+<h1>Source of truth and consistency boundary</h1>
+<div class="main">Architecture must define which data is authoritative, which state may be derived and which updates must be consistent together.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>A database stores values, but it does not automatically own business decisions. Shared storage often hides unclear ownership and inconsistent updates.</p></div>
+  <div><h2>Use in practice</h2><p>Mark source of truth, transition owner, consistency boundary and any eventually consistent/read-model data.</p></div>
+  <div><h2>Concrete example</h2><p>Reservation DB stores state. Reservation Management owns lifecycle transition. Notification delivery status may be eventually consistent and retried independently.</p></div>
+</div>
+<div class="sketch"><pre>stored value ≠ decision owner
+source of truth · consistency boundary · derived state</pre></div>
+<details><summary>Detailed notes</summary><p>This reasoning maps directly to distributed systems, automotive zoning, data ownership across services and safety/security boundaries.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>17/32</span></div>
+<h1>Dynamic level D0: System sequence</h1>
+<div class="main">A system sequence shows the interaction between actor and system without exposing internal structure.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>It is useful when the architectural question is still about externally visible operations, not internal allocation.</p></div>
+  <div><h2>Use in practice</h2><p>Use it to clarify system operations and externally observable outcomes before diving into architecture participants.</p></div>
+  <div><h2>Concrete example</h2><p>User → Reservation System: confirmReservation(id). System → User: confirmed or conflict rejected.</p></div>
+</div>
+<div class="sketch"><pre>Actor → System.confirmReservation(id)
+System → Actor: outcome</pre></div>
+<details><summary>Detailed notes</summary><p>This level is close to requirements. It should not pretend to explain internal architecture.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>18/32</span></div>
+<h1>Dynamic level D1: Architecture sequence</h1>
+<div class="main">An architecture sequence shows how logical architectural elements collaborate to realize a significant scenario.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>This is where static architecture is tested dynamically. The sequence should reveal decision ownership, state change, boundary crossings and failure points.</p></div>
+  <div><h2>Use in practice</h2><p>Use participants from the L1/L2 static architecture. Show business decisions and architecturally relevant calls, not every method call.</p></div>
+  <div><h2>Concrete example</h2><p>User → API → Reservation Management → Availability → Persistence. alt conflict: reject without state change.</p></div>
+</div>
+<div class="sketch"><pre>User → API → Reservation Management → Availability → Persistence
+alt conflict → reject</pre></div>
+<details><summary>Detailed notes</summary><p>This is the main dynamic architecture view for L03.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>19/32</span></div>
+<h1>Dynamic level D2: Detailed object sequence</h1>
+<div class="main">A detailed object sequence belongs mostly to design, but it can support architecture when it explains ownership inside one boundary.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>Too much detail hides architectural meaning. Too little detail hides whether an important responsibility can actually be realized.</p></div>
+  <div><h2>Use in practice</h2><p>Use it only for a focused slice: the classes/interfaces that realize one architectural responsibility or rule.</p></div>
+  <div><h2>Concrete example</h2><p>ReservationApplication.confirm() calls Reservation.canConfirm(), AvailabilityPolicy.hasConflict(), then Reservation.confirm().</p></div>
+</div>
+<div class="sketch"><pre>ReservationApplication → Reservation
+ReservationApplication → AvailabilityPolicy
+Reservation.confirm()</pre></div>
+<details><summary>Detailed notes</summary><p>This view should not be a full call trace. It is a focused realization of an architectural responsibility.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>20/32</span></div>
+<h1>Failure and concurrency timelines</h1>
+<div class="main">Some dynamic questions are better answered by a timeline than by a classic sequence diagram.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>Failure semantics depend on time order, commit points, retry, idempotency and what the caller has already observed.</p></div>
+  <div><h2>Use in practice</h2><p>Use a timeline when the key question is what has already happened when something fails or repeats.</p></div>
+  <div><h2>Concrete example</h2><p>CONFIRMED saved → Notification call times out → user already saw success → retry sends notification later.</p></div>
+</div>
+<div class="sketch"><pre>commit CONFIRMED → notify() timeout → retry later
+Questions: rollback? duplicate? observe?</pre></div>
+<details><summary>Detailed notes</summary><p>This widens “dynamic view” beyond UML sequences while keeping the same purpose: reason about execution.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>21/32</span></div>
+<h1>Runtime/deployment view</h1>
+<div class="main">Runtime view answers where logical elements actually execute and what runtime failure/operation boundaries exist.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>Logical separation is not deployment separation. Turning a module into a service adds network failure, deployment complexity, observability needs and operational ownership.</p></div>
+  <div><h2>Use in practice</h2><p>Map logical elements to processes/deployables, databases, external systems and nodes/zones where relevant.</p></div>
+  <div><h2>Concrete example</h2><p>One Reservation Application process contains Reservation Management, Approval Workflow and Notification Integration. PostgreSQL, IdP and Notification Service are separate runtime elements.</p></div>
+</div>
+<div class="sketch"><pre>Logical modules → one application process
+Application → PostgreSQL / IdP / Notification Service</pre></div>
+<details><summary>Detailed notes</summary><p>This is especially important in modern and automotive contexts where runtime topology has strong consequences.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>22/32</span></div>
+<h1>Which view when? Practical selection rule</h1>
+<div class="main">Draw the smallest view that answers the current architecture question.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>A fixed diagram checklist creates work without insight. View selection should follow concern and decision need.</p></div>
+  <div><h2>Use in practice</h2><p>Ask the question first, then choose the view level. If the view does not support a decision, reduce or remove it.</p></div>
+  <div><h2>Concrete example</h2><p>Inside/outside? Context. Who owns state? State ownership. Who collaborates? Architecture sequence. Where does it run? Runtime mapping. What class owns the rule? Focused class view.</p></div>
+</div>
+<div class="sketch"><pre>question → view → decision/evidence
+not: notation → diagram → hope</pre></div>
+<details><summary>Detailed notes</summary><p>This slide directly addresses when to create structural, dynamic, state and runtime models.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>23/32</span></div>
+<h1>Architecture baseline: expected end result</h1>
+<div class="main">The result of architecture work is a connected baseline of decisions, models and evidence — not one final diagram.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>A single component diagram cannot express drivers, alternatives, state ownership, runtime mapping, failure semantics and implementation constraints.</p></div>
+  <div><h2>Use in practice</h2><p>At the end, the baseline should explain what was decided, why, how it is represented, how code must follow it and what risk remains.</p></div>
+  <div><h2>Concrete example</h2><p>Drivers; decision question; alternatives; ADR; context; domain; logical static view; sequence; state ownership; runtime mapping; AS-IS/TO-BE delta; conformance rule; open risks.</p></div>
+</div>
+<div class="sketch"><pre>drivers → ADR → views → implementation constraints → evidence → open risks</pre></div>
+<details><summary>Detailed notes</summary><p>This is the concrete answer to “what models should exist at the end of architecture?”</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>24/32</span></div>
+<h1>Alternatives answer one decision question</h1>
+<div class="main">Architecture alternatives are meaningful only when they are different answers to the same question.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>Comparing arbitrary styles is weak. “Layered vs microservices vs event-driven” may compare categories that can coexist. A decision question creates a fair comparison.</p></div>
+  <div><h2>Use in practice</h2><p>State the question first. Sketch two materially different alternatives. Compare them against the same drivers and scenario.</p></div>
+  <div><h2>Concrete example</h2><p>Question: where should delayed approval workflow live? A: same deployable module. B: independent worker/service.</p></div>
+</div>
+<div class="sketch"><pre>Decision question
+ A: same deployable
+ B: independent worker/service</pre></div>
+<details><summary>Detailed notes</summary><p>Architecture style vocabulary is useful only after the problem is framed.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>25/32</span></div>
+<h1>Walk alternatives through the same scenario</h1>
+<div class="main">Scenario walkthrough reveals consequences that a pros/cons table can hide.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>The important difference between alternatives is often visible only when state, failure, retry or delayed response occurs.</p></div>
+  <div><h2>Use in practice</h2><p>Use a table: step/event → Alternative A behavior → Alternative B behavior → risk/trade-off.</p></div>
+  <div><h2>Concrete example</h2><p>Approval arrives after request ends; Resource changed meanwhile; revalidate before final confirm; compare where state lives and who retries.</p></div>
+</div>
+<div class="sketch"><pre>scenario step | A | B | consequence</pre></div>
+<details><summary>Detailed notes</summary><p>This is a lightweight version of scenario-based architecture evaluation.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>26/32</span></div>
+<h1>ADR records the reasoning memory</h1>
+<div class="main">ADR preserves why a consequential architecture decision was made, including the downside accepted at the time.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>Future maintainers see what exists in code. They often cannot see what was rejected, which driver mattered or when the decision should be revisited.</p></div>
+  <div><h2>Use in practice</h2><p>Record context, drivers, alternatives, decision, reason, accepted negative consequences and reconsideration trigger.</p></div>
+  <div><h2>Concrete example</h2><p>Keep Approval inside the same deployable until independent scaling or ownership becomes a real driver.</p></div>
+</div>
+<div class="sketch"><pre>context → alternatives → decision → accepted downside → reconsider when</pre></div>
+<details><summary>Detailed notes</summary><p>An ADR without negative consequence is usually just a preference statement.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>27/32</span></div>
+<h1>Cross-view consistency is the quality gate</h1>
+<div class="main">Architecture becomes credible when different views describe the same decisions without contradiction.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>Each view can look correct alone. The actual architecture is the consistent set of decisions across views and code.</p></div>
+  <div><h2>Use in practice</h2><p>Check static ↔ sequence ↔ state ↔ runtime ↔ implementation. Fix mismatches before changing code further.</p></div>
+  <div><h2>Concrete example</h2><p>Static view says only Reservation Management changes lifecycle state, but code shows Controller writing state directly. This is architecture drift.</p></div>
+</div>
+<div class="sketch"><pre>static ↔ sequence ↔ state ↔ runtime ↔ code</pre></div>
+<details><summary>Detailed notes</summary><p>This is a major expert skill: finding inconsistencies between views.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>28/32</span></div>
+<h1>AS-IS → TO-BE delta drives code change</h1>
+<div class="main">Architecture should drive only necessary implementation changes, not decorative refactoring.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>If the current implementation already conforms to the accepted decision, keep it. If it violates the decision, change it. If unclear, verify it.</p></div>
+  <div><h2>Use in practice</h2><p>Use a delta table with actions CHANGE, KEEP, VERIFY.</p></div>
+  <div><h2>Concrete example</h2><p>AS-IS: Notification SDK in application logic. TO-BE: isolated Notification Integration. Action: CHANGE.</p></div>
+</div>
+<div class="sketch"><pre>AS-IS | TO-BE | action
+CHANGE · KEEP · VERIFY</pre></div>
+<details><summary>Detailed notes</summary><p>This connects architecture to code economically and prevents architecture exercises from becoming random rewrites.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>29/32</span></div>
+<h1>Conformance protects architecture during change</h1>
+<div class="main">A conformance check is valuable only when it protects a concrete architecture rule derived from a decision.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>“We have architecture tests” is not enough. The check must prevent a meaningful decision from silently eroding.</p></div>
+  <div><h2>Use in practice</h2><p>Turn the decision into an explicit rule and make a repeatable check: static analysis, dependency test, repository query, review rule or runtime evidence.</p></div>
+  <div><h2>Concrete example</h2><p>Decision: lifecycle owner controls Reservation state. Rule: Controller/Adapter must not write Reservation.state directly.</p></div>
+</div>
+<div class="sketch"><pre>decision → rule → repeatable check → evidence</pre></div>
+<details><summary>Detailed notes</summary><p>This becomes increasingly important when code is generated or changed quickly.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>30/32</span></div>
+<h1>Quality attributes reshape architecture</h1>
+<div class="main">Quality concerns are not adjectives added after design; they can change structure, boundaries, runtime and interfaces.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>Performance, availability, security, modifiability and auditability create different architectural pressures and trade-offs.</p></div>
+  <div><h2>Use in practice</h2><p>Express quality as a scenario or evaluable criterion, then see which architecture decisions it affects.</p></div>
+  <div><h2>Concrete example</h2><p>Notification outage must not prevent confirmed Reservation from being stored, but delivery must be retried and observable.</p></div>
+</div>
+<div class="sketch"><pre>quality concern → scenario/criterion → architecture pressure → trade-off</pre></div>
+<details><summary>Detailed notes</summary><p>This prepares L04, where quality concerns become measurable.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>31/32</span></div>
+<h1>Handoff to detailed design</h1>
+<div class="main">Architecture says where responsibility and constraints live; detailed design says how they are realized inside those boundaries.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>The boundary is not determined by notation. A class-level decision can be architectural if it affects ownership or system guarantees; a component diagram can be merely descriptive if it carries no consequence.</p></div>
+  <div><h2>Use in practice</h2><p>End L03 with accepted boundaries, interfaces, ownership, runtime mapping and constraints. Continue in L05 with class design, patterns, algorithms, cohesion/coupling and refactoring.</p></div>
+  <div><h2>Concrete example</h2><p>Architecture: Availability owns conflict evaluation. Detailed Design: AvailabilityPolicy, interval overlap algorithm, repository query and tests.</p></div>
+</div>
+<div class="sketch"><pre>Architecture: where + why
+Detailed design: how inside</pre></div>
+<details><summary>Detailed notes</summary><p>This slide keeps architecture deep without swallowing the rest of the course.</p></details>
+</section>
+
+<section class="slide">
+<div class="top">SWI · L03 · Architecture <span>32/32</span></div>
+<h1>Expert architecture review loop</h1>
+<div class="main">A strong architecture can explain the chain from system claim to implementation evidence.</div>
+<div class="cols">
+  <div><h2>Reasoning</h2><p>This review loop works across web systems, enterprise systems, embedded systems, automotive, safety and security contexts. The domain changes, but the reasoning structure remains.</p></div>
+  <div><h2>Use in practice</h2><p>Ask the same expert questions: what claim is protected, who owns it, why this boundary, what alternative was rejected, what downside accepted, what evidence shows it still holds?</p></div>
+  <div><h2>Concrete example</h2><p>BR-02 → lifecycle owner → consistency boundary → mechanism chosen → state mutation rule → conformance/verification evidence.</p></div>
+</div>
+<div class="sketch"><pre>claim → owner → boundary → alternative → downside → evidence</pre></div>
+<details><summary>Detailed notes</summary><p>This is the final mental model the lecture should leave behind.</p></details>
+</section>
+</body></html>

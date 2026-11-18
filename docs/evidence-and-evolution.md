@@ -343,3 +343,158 @@ Následující opravy jsou plánované; v rámci owner review byla doplněna dok
 - F2 byl ověřen s náhradou DOM a API; ověření v prohlížeči se skutečným backendem a regresní ověření budoucích oprav zbývá provést.
 - Dočasné ověřovací kontroly nejsou součástí trvalé testové sady. Build a databázové integrační sady nebyly při owner review opakovány; výše uvedené výsledky z 22. 10. 2026 jsou historickou evidencí.
 - Podklady C03 použité pro posouzení F3: `SWI_C03_PartA_Tuesday_students_bilingual_v8.html` a `SWI_C03_students_bilingual_v10.html`. Závěr N/A vychází z jejich obsahu a pravidla C06 nehodnotit nezadané požadavky.
+
+## Registr rizik C07/C08
+
+**Stav k 16. 11. 2026.** Výchozí verze tohoto záznamu je `main` na commitu `c39d54feda198c78c1b330ce3008f2eb6e83ae97`. Nálezy C06 se nadále vztahují k hodnocenému commitu `996e9be8880187314e14d294c6fcc11974b50556`. Záznam doplňuje [část B zadání C07](../zadani/SWI_C07_C08_Assignment_CZ_EN_FINAL.html).
+
+Pravděpodobnost **L** i dopad **I** mají stupnici 1 (nízký), 2 (střední), 3 (vysoký). Priorita je součin L × I podle zadání: 1–2 LOW, 3–4 MEDIUM, 6–9 HIGH. Počáteční a očekávané hodnoty jsou odhady. Skutečné zbytkové riziko se vyhodnotí až po provedení opatření a kontrole důkazů. Vlastníci a termíny níže jsou návrhy k potvrzení týmem. Kde je známá návaznost na další výstup, termín je vyjádřený projektovým krokem.
+
+### Otevřené akce po C06
+
+| Položka | Stav | Navržený vlastník a termín | Důkaz pro uzavření |
+|---|---|---|---|
+| F1 – zastaralý čas při rozhodnutí | Otevřeno, oprava přijata | Martin Kalus, reprodukce před rozhodnutím C08 a důkaz opravy před rozhodnutím o vydání C09, pokud tým F1 zvolí pro C08. | Confirm a Decide při překročení lhůty během skutečného čekání na zámek požadavek odmítnou. Samostatné čtení DB potvrdí původní stav rezervace a nezměněný outbox. Stejný vzor se prověří u Cancel. |
+| F2 – nesprávný výpočet denního limitu ve webu | Otevřeno, oprava přijata | Tomáš Kirnig, navržený interní termín opravy a ověření 27. 11. 2026 v samostatné změně. | Regrese s `PENDING_APPROVAL`, odlišným UTC a pražským datem a intervalem přes půlnoc. Ověřit součet i stav tlačítka ve webu, včetně platného hraničního případu. Serverová kontrola zůstává autoritativní. |
+| D4 – chybějící trvalé testy časové hranice | Otevřeno, doplnění testů přijato | Tomáš Kirnig, před regresním během C09. | V běžné sadě `npm run test:unit` projde povolený případ přesně 15 minut před začátkem a očekávané odmítnutí o 1 ms později. |
+
+Podrobnosti a zdroje k těmto akcím jsou v [posouzení C06](#c06-internal-evidence-assessment).
+
+### R-01 Aplikace může při čekání přijmout pozdní potvrzení
+
+- **Kategorie** Technical / Quality.
+- **Popis rizika** Confirm a Decide dnes zachytí čas před čekáním na zámky → při souběhu může konkrétní požadavek přečkat lhůtu a projít se starým časem → do DB se uloží potvrzení v rozporu s přijatým pravidlem. Známou příčinou rizika je [vada F1](#verified-findings).
+- **Počáteční riziko** L=2, protože cesta se zámkem existuje a scénář byl reprodukován se simulovaným čekáním. I=3, protože jde o neplatnou změnu trvalého stavu. **HIGH (6)**.
+- **Strategie** MITIGATE. Opravit časové rozhodnutí ve skutečných cestách a pokrýt souběh regresí.
+- **Opatření, vlastník, termín** Martin Kalus. Před rozhodnutím C08 ověřit případ na výchozí verzi, pokud tým vybere F1. Před vydáním verze s opravou prověřit Confirm, Decide a obdobný vzor u Cancel.
+- **Důkaz účinnosti a stav** Plánováno. Po zavedení opatření uložit výsledek testu na izolované PostgreSQL, který doloží skutečné čekání na zámek, správné odmítnutí po lhůtě a samostatným čtením ověří stav rezervace a outbox. Přidat kontrolní průchod před lhůtou.
+- **Očekávané reziduální riziko** L=1, I=3, **MEDIUM (3)**. Oprava a regrese sníží pravděpodobnost, případný chybný zápis zůstane závažný.
+- **Skutečné reziduální riziko** `NOT VERIFIED`.
+- **Přijetí reziduálního rizika** Tým Křečkomat po průchodu uvedené regrese a kontrole všech dotčených časových rozhodnutí.
+- **Monitoring a reakce** Znovu posoudit při změně zámků nebo práce s časem a před rozhodnutím o vydání. Pokud pozdní operace uspěje nebo se změní DB stav či outbox, nález zůstává otevřený a vydání opravy je `HOLD`.
+
+### R-02 Výpadek databáze může zablokovat ověření
+
+- **Kategorie** External dependency.
+- **Popis rizika** Rezervační operace a start aplikace závisejí na PostgreSQL → při výpadku služby, sítě nebo spojení může testovací aplikace ztratit přístup k datům → tým neprovede klíčový scénář nebo neověří výsledek rozpracované operace. [Konfigurace](../src/db.ts) · [Start aplikace](../src/index.ts).
+- **Počáteční riziko** L=2, protože spojení s externí DB je reálná závislost. I=3, protože bez DB nelze ověřit rezervaci ani její uložený stav. **HIGH (6)**.
+- **Strategie** MITIGATE. Připravit izolovanou alternativu a ověřit reakci na poruchu i návrat spojení.
+- **Opatření, vlastník, termín** Dennis Carnevale. Před provozními pokusy C10 připravit samostatnou testovací PostgreSQL a postup obnovy. Před uzavřením C10 provést simulaci výpadku a následný pokus po obnově.
+- **Důkaz účinnosti a stav** Plánováno. Zapsat reakci operace a relevantní log, ověřit uložený stav po obnově a provést další běžnou operaci.
+- **Očekávané reziduální riziko** L=2, I=2, **MEDIUM (4)**. Záložní prostředí a ověřená obnova omezí dopad výpadku na práci týmu.
+- **Skutečné reziduální riziko** `NOT VERIFIED`.
+- **Přijetí reziduálního rizika** Tým Křečkomat po úspěšném pokusu C10 a ověření, že izolovanou alternativu lze znovu spustit podle návodu.
+- **Monitoring a reakce** Zkontrolovat spojení před integračním během a po změně konfigurace. Při selhání použít izolovanou DB. Před případným opakováním zápisu s neznámým výsledkem nejprve prověřit stav dat. Další kontrola při uzavírání C10.
+
+### R-03 Čistý checkout může na druhém počítači selhat
+
+- **Kategorie** Release / Operation.
+- **Popis rizika** [README](../README.md#instalace-a-nastavení) uvádí doporučený runtime a postup orientovaný na Supabase, konkrétní prostředí kandidáta zatím není doložené → druhý člen může narazit na rozdíl v runtime, lokální konfiguraci nebo přípravě DB → nepůjde reprodukovat sestavení a běh kandidáta na vydání.
+- **Počáteční riziko** L=2, protože je více variant nastavení a chybí doložený čistý běh druhým členem pro C09. I=3, protože bez reprodukce chybí podstatný důkaz pro rozhodnutí o vydání. **HIGH (6)**.
+- **Strategie** MITIGATE. Nechat druhého člena ověřit celý postup jen podle verzovaných instrukcí.
+- **Opatření, vlastník, termín** Petr Gála. Před rozhodnutím C09 provést čistý checkout kandidáta, instalaci podle lockfilu, build, testy s izolovanou DB a kontrolní spuštění. Zapsat runtime, kroky přípravy schématu a netajnou konfiguraci.
+- **Důkaz účinnosti a stav** Plánováno. V evidenci C09 uložit testovaný commit, prostředí, příkazy, výsledky a log. Pokud chybí krok v návodu, doplnit jej a čistý pokus zopakovat.
+- **Očekávané reziduální riziko** L=1, I=3, **MEDIUM (3)**. Ověřený návod sníží pravděpodobnost skrytého lokálního předpokladu, neúspěšná reprodukce vydání dál ovlivní.
+- **Skutečné reziduální riziko** `NOT VERIFIED`.
+- **Přijetí reziduálního rizika** Tým Křečkomat po úspěšném čistém běhu druhého člena a uložení reprodukovatelného postupu.
+- **Monitoring a reakce** Znovu ověřit při změně lockfilu, runtime, konfigurace nebo schématu. Pokud checkout potřebuje nezdokumentovanou ruční úpravu, zaznamenat překážku a odložit vydání do opravy a opakování pokusu. Další kontrola před rozhodnutím C09.
+
+### R-04 Pozdní integrace může odsunout předání C09
+
+- **Kategorie** Schedule / Integration.
+- **Popis rizika** [C09](../zadani/C09_ZADANI_CZ_EN_PODROBNE.html) závisí na posouzené změně z [C08](../zadani/C08_FINAL.html) a nové výstupy zatím nejsou doložené → pokud se řešení spojí až při předání, může se pozdě ukázat nesoulad s akceptačními podmínkami → týmu zbude málo času na opravu a opakování integračních testů.
+- **Počáteční riziko** L=2, protože karta změny, její review a nový integrační důkaz jsou navazující otevřené kroky. I=2, protože zpoždění je možné zmírnit včasným omezením rozsahu a přeplánováním. **MEDIUM (4)**.
+- **Strategie** MITIGATE. Držet se jedné změny a naplánovat kontrolní integrační běh před předáním.
+- **Opatření, vlastník, termín** Tomáš Kirnig. Před schválením C08 domluvit vlastníka a druhého člena pro review. Při předání do C09 domluvit termín prvního integračního běhu s rezervou na opravu.
+- **Důkaz účinnosti a stav** Plánováno. Posouzená karta C08 s rozsahem a testy, datovaný výsledek prvního integračního běhu před předáním a záznam o vypořádání případných selhání.
+- **Očekávané reziduální riziko** L=1, I=2, **LOW (2)**. Včasný běh dává prostor reagovat na zjištěné problémy.
+- **Skutečné reziduální riziko** `NOT VERIFIED`.
+- **Přijetí reziduálního rizika** Tým Křečkomat po review rozsahu a po integračním běhu, který nechal prostor na případnou opravu a ověření.
+- **Monitoring a reakce** Kontrola při předání C08 → C09 a po prvním integračním běhu. Pokud při předání chybí posouzená karta nebo běh selže, znovu odhadnout termín a omezit práci na schválenou změnu a její ověření. Ostatní otevřené akce ponechat v plánu.
+
+## C08 — Ověření F1 na výchozí verzi
+
+**Vazba.** [CR-08](intent-and-change.md#c08--cr-08-rozhodný-čas-při-změně-stavu-rezervace) vychází z [F1](#verified-findings) a [R-01](#r-01-aplikace-může-při-čekání-přijmout-pozdní-potvrzení). Oba případy ověřují [REQ-05](reservation-specification.md#op-03--confirm-reservation--potvrdit-rezervaci) a [BR-01](reservation-specification.md#br-01--význam-časového-intervalu) ve v0.2. Výchozí přechody zachycuje [stavový diagram v0.2](../DIAGRAMS.md#21-aktualizovaný-stavový-diagram-životního-cyklu-v02) a architekturu [ADR-01](architecture-and-decisions.md#adr-01--umístění-a-vlastnictví-delayed-approval-workflow-a-časovače-expirací). Očekávané výsledky byly stanoveny před během podle pravidla `currentTime <= start - 15 min` v okamžiku rozhodnutí. Čas přijetí HTTP požadavku slouží jako vstup do reprodukce.
+
+**Výchozí verze a prostředí.** Oba případy byly spuštěny 16. 11. 2026 na `c39d54feda198c78c1b330ce3008f2eb6e83ae97`. Před během byla porovnána shoda všech souborů v `src/`, manifestů závislostí a `tsconfig.json` s commitem. Prostředí bylo Windows, Node.js 22.14.0, Express 5.2.1, pg 8.23.0, tsx 4.23.13 a izolovaná PostgreSQL 17.11 v čerstvé DB `swi_c08_f1` na `127.0.0.1:55015`. Aplikace připravila schéma přes inicializaci v [repository](../src/repository.ts). [Příkaz a konfigurace](../README.md#ověření-lhůty-confirm-pro-c08) · [Použitý skript](../scripts/verify-c08-f1.cjs).
+
+**Společné podmínky.** Každý případ používá samostatného fiktivního studenta a jiného aktivního křečka bez schvalování, bez kolize a bez vyčerpaného limitu. Fixture má délku 10 minut a stav `DRAFT`. Intervaly jsou `[start,end)` a časy z běhu jsou v UTC. Při opakování určuje skript hranici relativně k systémovému času, přibližně 20 s v budoucnosti pro první případ a 8 s pro druhý. Start je vždy hranice + 15 min. Používá se běžná cesta HTTP Confirm bez časové hlavičky a skutečný `SELECT ... FOR UPDATE`. O čekání rozhoduje PostgreSQL pomocí `pg_stat_activity` a `pg_blocking_pids()`.
+
+### TC-C08-01 — Zámek uvolněný před lhůtou
+
+**Testovací data z běhu.** Rezervace `1`, student `c08-student-early`, křeček `c08-ferda-early`, interval `[10:44:57.410Z,10:54:57.410Z)`, hranice `10:29:57.410Z`, 16. 11. 2026.
+
+| Krok | Akce | Očekávání před během | Skutečnost po běhu |
+|---|---|---|---|
+| 1 | Uložit fixture a samostatně načíst rezervaci a outbox. | `DRAFT`, 0 záznamů outboxu. | `DRAFT`, 0 záznamů. |
+| 2 | Držet řádkový zámek na rezervaci a odeslat `POST /api/reservations/1/confirm` s `{"user_id":"c08-student-early"}`. | Požadavek přijde a prokazatelně čeká před lhůtou. | Odesláno v `10:29:37.427Z`. V `10:29:37.754Z` čekal backend `21668` na zámek držený backendem `25636` (`transactionid`). |
+| 3 | Ukončit transakci držící zámek před lhůtou a načíst HTTP odpověď. | `200`, `CONFIRMED`. | COMMIT dokončen v `10:29:37.755Z`. HTTP `200`, `CONFIRMED`. |
+| 4 | Po odpovědi samostatným DB dotazem přečíst stav a počet odpovídajících oznámení. | `CONFIRMED`, 1 nový záznam. | `CONFIRMED`, 1 záznam. |
+
+**Verdikt** `PASS`. Kontrolní průchod je referencí pro regresi v C09.
+
+### TC-C08-02 — Zámek uvolněný po lhůtě
+
+**Testovací data z běhu.** Rezervace `2`, student `c08-student-late`, křeček `c08-ferda-late`, interval `[10:44:45.886Z,10:54:45.886Z)`, hranice `10:29:45.886Z`, 16. 11. 2026.
+
+| Krok | Akce | Očekávání před během | Skutečnost po běhu |
+|---|---|---|---|
+| 1 | Uložit druhou fixture a samostatně načíst rezervaci a outbox. | `DRAFT`, 0 záznamů outboxu. | `DRAFT`, 0 záznamů. |
+| 2 | Držet řádkový zámek a ještě před lhůtou odeslat `POST /api/reservations/2/confirm` s `{"user_id":"c08-student-late"}`. | PostgreSQL prokáže, že Confirm čeká na testovací transakci před lhůtou. | Odesláno v `10:29:37.890Z`. V `10:29:37.897Z` čekal backend `11188` na zámek držený backendem `21668` (`transactionid`). |
+| 3 | Až po lhůtě ukončit transakci a načíst HTTP odpověď. | `400` s důvodem časového předstihu. | COMMIT zahájen v `10:29:45.995Z` (109 ms po hranici) a dokončen v `10:29:45.996Z`. HTTP `200`, `CONFIRMED`. |
+| 4 | Po odpovědi samostatně načíst stav a outbox. | `DRAFT`, 0 nových záznamů. | `CONFIRMED`, 1 záznam. |
+
+**Verdikt** `FAIL`. F1 je pro cestu HTTP Confirm potvrzený na skutečném zámku PostgreSQL. Pozdní požadavek porušil REQ-05 a změnil trvalý stav i outbox. Po schválení změny bude tento případ akceptační regresí AC-02.
+
+**Doklad a rozsah.** Oddělený dotaz po HTTP odpovědi použil `SELECT r.status, count(o.id)::int AS outbox_count FROM reservations r LEFT JOIN notifications_outbox o ON o.reservation_id = r.id WHERE r.id = $1 GROUP BY r.id`. Skript vrátil kód `1` v důsledku `TC-C08-02 FAIL`. Po běhu byla testovací instance ukončena. Pro opakování nastavte novou prázdnou testovací DB podle README. Spuštěné případy pokrývají Confirm s čekáním na zámek řádku rezervace. Přesná inkluzivní hranice, čekání na zámek křečka, Decide a Cancel vyžadují následující ověření. Účinnost budoucí opravy a skutečné zbytkové riziko R-01 jsou `NOT VERIFIED`.
+
+## C09 — Integrace a kandidát na vydání
+
+**Změna a identita kódu.** Tým po review Tomáše Kirniga přijal variantu A v [CR-08](intent-and-change.md#c08--cr-08-rozhodný-čas-při-změně-stavu-rezervace). Výchozí běh C08 je na `c39d54feda198c78c1b330ce3008f2eb6e83ae97`. Implementace vychází z posouzené karty na větvi `dodelani_C07-C10` na `ec5678102256fa96e5d10836c1c265a0e9d699f5`. Obě výchozí verze mají stejný kód operací a závislosti. **After** `58d97bdf53482824c7bfeaa1498884fd74c1bce1`.
+
+**Implementace.** [HTTP API](../src/app.ts) předá volitelný časový override. Běžný Confirm odečte hodiny ve [službě](../src/service.ts) po zámcích a po načtení podkladů. Decide odečte čas po zámku rezervace i křečka. Cancel odečte čas po zámku rezervace a po kontrole idempotentní větve. [Kontrakt a sekvence](architecture-and-decisions.md#část-h1-návrhová-sekvence-confirm-reservation) popisují stejný průchod. Oprávnění, stavy, rollback, schéma a stávající volitelná testovací hlavička mají dosavadní kontrakt. F2 je mimo rozsah CR-08.
+
+### Ověření akceptačních podmínek a regresí
+
+Běh 16. 11. 2026 proběhl na Windows v odděleném adresáři s kódem výchozího commitu a přesnou sadou změn z commitu **After**. Použito Node.js 22.14.0, npm 10.9.2 a nová PostgreSQL 17.11. V adresáři nebyly lokální závislosti ani `.env`. Spuštěno `npm ci`, `npm run check:c09 -- 55386` a smoke sestavené aplikace. Kontrola skončila s kódem `0`. [Úplný lokální výstup](verification-c09.txt) · [Reprodukce z čistého checkoutu](../README.md#c09-ověření-z-čistého-checkoutu).
+
+| Test a příkaz | Očekávání | Skutečnost |
+|---|---|---|
+| TC-C08-01 · [původní skript](../scripts/verify-c08-f1.cjs) v `check:c09` | Zámek uvolněný před lhůtou → `200`, `CONFIRMED`, jeden nový outbox záznam. | **PASS.** Uvolnění `11:26:53.148Z` před hranicí `11:27:12.988Z`. HTTP `200`, databáze `CONFIRMED` a 1 záznam. |
+| TC-C08-02 · stejný skript v `check:c09` | Požadavek čeká před lhůtou, zámek se uvolní po ní → `400` s důvodem předstihu, stav `DRAFT`, outbox beze změny. | **PASS.** PostgreSQL prokázala čekání v `11:26:53.195Z`. Hranice `11:27:01.185Z`, uvolnění `11:27:01.303Z`. HTTP `400`, v DB zůstal `DRAFT` s 0 záznamy. Původní výsledek C08 byl `FAIL`. |
+| AC-01/02 a schvalovací větev AC-05 · [nové scénáře](../src/decision-deadline.test.ts) | Confirm na -15 min uspěje, o 1 ms později vrátí `400` bez zápisu. Schvalovací větev uloží `PENDING_APPROVAL` a oznámení pro oba adresáty. | **PASS.** Stav a nové adresáty po úspěchu ověřil nový DB dotaz. Po odmítnutí se stav a celý outbox rovnaly počátečnímu snímku. |
+| AC-03 · nové scénáře | Approve i Reject uspějí 1 ms před `start - 1h`. Na hranici, za hranicí i po skutečném čekání na zámek křečka vrátí `400`, zachovají `PENDING_APPROVAL` a původní outbox. | **PASS** pro obě rozhodnutí, včetně kontroly původních outbox záznamů při všech odmítnutích. |
+| AC-04 · nové scénáře | Nový Cancel ve třech povolených stavech na hranici uspěje a přidá oznámení vlastníkovi. Pozdní pokus nebo čekání za hranici vrátí `400` bez změny. Opakovaný Cancel po lhůtě uspěje idempotentně. | **PASS.** Stavy, adresáti a počáteční outbox ověřeny nezávislým DB dotazem. |
+| Původní regrese · `npm run verify` v `check:c09` | Zachovat kolize, limit, oprávnění, souběh, atomický zápis a expiraci. | **PASS.** 30 původních scénářů a 7 regresí. |
+| Build, `npm test` a smoke | Sestavení, unit a architektonické kontroly a start s PostgreSQL. | **PASS.** 10 unit testů, 4 architektonické kontroly. `node dist/index.js` odpověděl na `GET /api` a `GET /api/hamsters` vrátil katalog z DB. |
+
+Integrační hranice je HTTP → aplikační transakce → PostgreSQL. Testy zámků potvrzují čekání přes `pg_stat_activity` a `pg_blocking_pids()`. Testy Decide a Cancel při zámku spouštějí samotnou HTTP aplikaci, takže časovač OP-06 nemění ověřovaný stav.
+
+### CI a vydání
+
+- **Automatizace.** [Workflow C09](../.github/workflows/c09.yml) používá čistý checkout, `npm ci`, Node.js 22.14.0 a samostatnou službu PostgreSQL 17.11. Na push a pull request spouští stejný `check:c09`. Lokální výsledek je ve výše uvedeném logu. [Běh GitHub Actions 43858548614](https://github.com/tomaskirnig/SWI_2027/actions/runs/43858548614) pro `72bcb1727df09053148f2d8c2ec1f6840cda5336` skončil `success`.
+- **Kandidát RC1.** Artefakt `Kreckomat-C09-RC1.zip` má SHA-256 `89b1000858421ae4c053326755882ccd26bfcd3a071053f857c4a710eb187951`. Obsahuje sestavený runtime v `dist/`, statický frontend a oba npm manifesty. `dist/index.js` z ověřeného sestavení má SHA-256 `2a1b8a31362f41d7c06f4b57580785f75700acefeb58c265220352543959a327`. Lockfile má SHA-256 `296f77cb77325c2138e4f2cba006035a6b17381c1482e5a830eacf570ac44917`.
+- **Schéma a konfigurace.** Schéma z [repository](../src/repository.ts) se inicializuje při startu bez nové migrace. Testovací konfigurace je lokální `127.0.0.1`, role `swi_c08`, DB `swi_c08_f1` a `DB_SSL=false` v izolované instanci. Návrat aplikace na původní kód obnoví původní chybu časového rozhodnutí a automaticky nevrátí už uložené rezervace ani oznámení. Případnou obnovu dat je potřeba posoudit zvlášť.
+- **Nezávislý code review a čistý checkout.** `DONE`. Tomáš Kirnig, 18. 11. 2026. Zrevidován diff commitu After (`58d97bd`) a následné provozní opravy logování (`ce83c5b`) proti AC-01 až AC-05. Potvrzeno korektní pořadí získávání zámků: u Confirm a Decide se čas vyhodnocuje až po zámku rezervace i křečka (`findHamsterByIdForUpdate`), u Cancel je zachována předřazená idempotence pro již zrušené rezervace. Čistý checkout byl proveden do nového odděleného adresáře na commitu `9ce0921` v prostředí Ubuntu 26.04.1 LTS, Node.js v22.22.1, npm 10.9.2 a PostgreSQL 18.6 na portu 55440. Postup: `git clone`, `git checkout 9ce0921`, `npm ci`, vytvoření prázdné DB `swi_c08_f1` s rolí `swi_c08` a spuštění `npm run check:c09 -- 55440`. Všech 5 fází (TC-C08-01/02, build, unit + arch testy, baseline + regrese a testy rozhodného času na reálných PostgreSQL zámcích) proběhlo s výsledkem PASS a exit kódem 0. Následný smoke test produkčního startu (`npm start`) ověřil `GET /api` (`status: ok`) a `GET /api/hamsters` (katalog křečků). Žádné blockery nebyly nalezeny.
+- **Pracovní stav vydání `RELEASED` (schváleno).** Vlastník změny Martin Kalus, nezávislý reviewer Tomáš Kirnig. Funkční ověření, testy souběhu i čistý checkout úspěšně dokončeny. Upozornění z `npm audit --omit=dev` byla analyzována: v prostředí chráněné intranetové aplikace nepředstavují bezprostřední zranitelnost a jsou zařazena do plánu údržby další verze. Riziko R-01 je plně otestováno a zmírněno (`VERIFIED - MITIGATED`).
+
+## C10 Provozní situace a logy
+
+Očekávání byla zapsána před oběma běhy 18. 11. 2026. Výchozí commit `55b1216014288fe6a3727e63940fd5ab2b34c329` vrátil při výpadku z Confirm HTTP `500`, ale tento požadavek neměl vlastní diagnostický záznam. Do [Confirm](../src/app.ts) proto přibyl log technického selhání na serveru. Následující výsledky jsou z opakovaného pokusu na commitu `ce83c5bb99816bdf84f839b498044a16278e0fd8`.
+
+Prostředí bylo Windows, Node.js 22.14.0, sestavení `npm run build`, aplikace `node dist/index.js` a čerstvá izolovaná PostgreSQL 17.11 na localhostu. Použity byly fiktivní účty a desetiminutové intervaly křečka `ferda` tři dny dopředu. Dva překrývající se návrhy byly založeny před prvním potvrzením. Stav a počet záznamů v outboxu se ověřovaly samostatným SQL čtením podle ID rezervace.
+
+| Situace | Očekávaný a skutečný výsledek | Ověření stavu | Co ukazují logy |
+|---|---|---|---|
+| Úspěšné potvrzení | Create má vrátit `201 DRAFT`, Confirm `200 CONFIRMED`. **PASS**, obě odpovědi odpovídaly. | Rezervace 1 v SQL `CONFIRMED` a jeden outbox záznam. | Aplikace k operaci nevytvořila záznam. Odpověď a uložený stav stačí k prokázání úspěchu. |
+| Zamítnutá kolize | Confirm druhého návrhu posunutého o 5 minut má vrátit `409`. **PASS**, API vrátilo `409`. | Rezervace 1 zůstala `CONFIRMED`. Rezervace 2 zůstala `DRAFT` s nulou outbox záznamů. | Aplikace vrátila kolizi klientovi a nezapsala ji do logu. Samostatný chybový log by zvyšoval šum. |
+| Technická porucha a obnova | Confirm rezervace 3 má při zastavené DB vrátit `500` a vytvořit diagnostický záznam. Po obnově má jít potvrzení provést. **PASS**, log vznikl a po obnově prošel nový pokus s `200`. | Databáze byla zastavena pomocí `pg_ctl stop -m fast` a spuštěna nad stejným adresářem. Před opakováním samostatné SQL potvrdilo `DRAFT` a 0 záznamů. Po potvrzení bylo v DB `CONFIRMED` a 1 záznam. | V `07:27:37.545Z` Confirm zaznamenal `ECONNREFUSED` a HTTP `500`. PostgreSQL oznámila připravenost k připojení v `08:27:37.976` CET. |
+| Restart aplikace | Po zastavení má HTTP přestat odpovídat. Po novém startu má původní potvrzení přežít a další Create i Confirm mají projít. **PASS**, nový proces načetl rezervaci 1 a pro rezervaci 4 vrátil `201` a `200`. | Po zastavení selhalo spojení na port aplikace. Po restartu ověřilo `GET /api/reservations/1` původní rezervaci. SQL potvrdilo rezervace 1 a 4 jako `CONFIRMED`, každou s jedním outbox záznamem. | Ukončení procesu zaznamenal testovací nástroj. Nový proces zaznamenal `Databáze připravena.` a `Křečkomat API server běží`. |
+
+Relevantní výřez z logu aplikace při výpadku.
+
+```json
+{"timestamp":"2026-11-18T07:27:37.545Z","component":"reservation-api","operation":"confirm","errorCode":"ECONNREFUSED","httpStatus":500}
+```
+
+Pro diagnostiku mají hodnotu technické chyby a start služby. Z logu výpadku šlo určit čas, operaci, typ chyby a odpověď aplikace. Přetrvání rezervací, nepřítomnost vedlejšího zápisu při výpadku a úspěch další operace doložilo až HTTP ověření se samostatným čtením PostgreSQL.

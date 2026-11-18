@@ -12,6 +12,7 @@
     "test:unit": "tsx src/domain.test.ts",
     "test:arch": "tsx src/arch.test.ts",
     "test": "npm run test:unit && npm run test:arch",
+    "check:c09": "node scripts/check-c09.cjs",
     "spike": "tsc && node dist/spike.js"
   },
   "repository": {

@@ -1,0 +1,154 @@
+Node v22.14.0 npm 10.9.2
+
+added 146 packages, and audited 147 packages in 7s
+
+34 packages are looking for funding
+  run `npm fund` for details
+
+6 vulnerabilities (3 moderate, 2 high, 1 critical)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+npm notice
+npm notice New major version of npm available! 10.9.2 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice
+PostgreSQL postgres (PostgreSQL) 17.11 at 127.0.0.1:55386
+
+> swi_2027@1.0.0 check:c09
+> node scripts/check-c09.cjs 55386
+
+{"runtime":"v22.14.0","database":{"name":"swi_c08_f1","role":"swi_c08","version":"17.11","existing_reservations":null},"port":55386,"http":"http://127.0.0.1:53243"}
+{"caseId":"TC-C08-01","verdict":"PASS","id":1,"userId":"c08-student-early","hamsterId":"c08-ferda-early","start":"2026-11-16T11:42:12.988Z","end":"2026-11-16T11:52:12.988Z","cutoff":"2026-11-16T11:27:12.988Z","before":{"status":"DRAFT","outbox_count":0},"requestedAt":"2026-11-16T11:26:53.000Z","wait":{"at":"2026-11-16T11:26:53.142Z","waiterPid":11688,"blockerPid":10244,"event":"transactionid"},"releaseStarted":"2026-11-16T11:26:53.142Z","releaseFinished":"2026-11-16T11:26:53.148Z","response":{"status":200,"body":{"id":1,"status":"CONFIRMED","hamster_id":"c08-ferda-early","requires_approval":false,"message":"Rezervace ID 1 byla úspěšně potvrzena."}},"after":{"status":"CONFIRMED","outbox_count":1}}
+{"caseId":"TC-C08-02","verdict":"PASS","id":2,"userId":"c08-student-late","hamsterId":"c08-ferda-late","start":"2026-11-16T11:42:01.185Z","end":"2026-11-16T11:52:01.185Z","cutoff":"2026-11-16T11:27:01.185Z","before":{"status":"DRAFT","outbox_count":0},"requestedAt":"2026-11-16T11:26:53.188Z","wait":{"at":"2026-11-16T11:26:53.195Z","waiterPid":10384,"blockerPid":11688,"event":"transactionid"},"releaseStarted":"2026-11-16T11:27:01.294Z","releaseFinished":"2026-11-16T11:27:01.303Z","response":{"status":400,"body":{"error":"Rezervaci lze potvrdit nejpozději 15 minut před jejím začátkem.","offerTimeShift":false}},"after":{"status":"DRAFT","outbox_count":0}}
+
+> swi_2027@1.0.0 build
+> tsc
+
+
+> swi_2027@1.0.0 test
+> npm run test:unit && npm run test:arch
+
+
+> swi_2027@1.0.0 test:unit
+> tsx src/domain.test.ts
+
+=== Křečkomat – Unit testy odvozené z Detailed Designu (C05 DD) ===
+
+[PASS] T-DD-01: Interface Contract — Neplatný interval (start >= end) vrátí INVALID_INTERVAL
+[PASS] T-DD-02: Algorithm Branch — Potvrzení méně než 15 min před začátkem vrátí LEAD_TIME_VIOLATION
+[PASS] T-DD-03: Failure Behavior — Neaktivní křeček (isActive = false) vrátí HAMSTER_INACTIVE
+[PASS] T-DD-04A: State Transition — Běžný křeček přejde přímo do stavu CONFIRMED
+[PASS] T-DD-04B: State Transition — Křeček vyžadující dohled přejde do stavu PENDING_APPROVAL
+[PASS] T-DD-05A: Collision Detection — Překryv intervalů vrátí SLOT_CONFLICT
+[PASS] T-DD-05B: Collision Detection — Pouhý dotyk hranic (14:30) není kolize a projde
+[PASS] T-DD-06A: Daily Limit — Čerpání 20 min + požadavek 15 min překročí limit 30 min
+[PASS] T-DD-06B: Daily Limit — Rozpad intervalu přes půlnoc rozdělí minuty do dvou dnů
+[PASS] T-DD-07: Invariant — Rezervaci ve stavu CANCELLED nelze potvrdit
+----------------------------------------
+PASS: 10
+FAIL: 0
+CELKEM: 10
+----------------------------------------
+
+
+> swi_2027@1.0.0 test:arch
+> tsx src/arch.test.ts
+
+
+=== Křečkomat – Ověření architektonických pravidel (C03 L2) ===
+
+[PASS] ARCH-01: Kontroler (src/app.ts) je izolován od databázového ovladače pg i pool.
+[PASS] ARCH-02: Doménový modul (src/domain.ts) obsahuje pouze čistou business logiku bez infrastruktury.
+[PASS] ARCH-03: Perzistenční vrstva (src/repository.ts) explicitně definuje IReservationRepository rozhraní.
+[PASS] ARCH-04: Aplikační služba deleguje SQL a transakce na repository.
+
+----------------------------------------
+Architektonická pravidla: VŠECHNA SPLNĚNA
+----------------------------------------
+
+
+> swi_2027@1.0.0 verify
+> tsx src/verify.ts && npm run verify:regression
+
+
+=== Křečkomat – ověření Specification Baseline ===
+
+[PASS] V-01 – Platný Create vytvoří DRAFT
+[PASS] V-02 – Neplatný interval nebo pozdní Create je odmítnut
+[PASS] V-03 – Neexistující křeček je odmítnut
+[PASS] V-04 – CONFIRMED blokuje Create, DRAFT neblokuje
+[PASS] V-05 – Denní limit 20 + 10 projde, 20 + 11 neprojde
+[PASS] V-06 – Volný aktivní křeček je AVAILABLE
+[PASS] V-07 – Překryv s CONFIRMED je UNAVAILABLE
+[PASS] V-08 – Dotyk hranic intervalů není kolize
+[PASS] V-09 – DRAFT a CANCELLED dostupnost neblokují
+[PASS] V-10 – Neaktivní křeček a neplatné Availability vstupy
+[PASS] V-11 – Platný DRAFT přejde do CONFIRMED
+[PASS] V-12 – Kolize vzniklá po Create zabrání Confirm
+[PASS] V-13 – Confirm znovu ověřuje denní limit
+[PASS] V-14 – Souběžné konfliktní Confirm dovolí nejvýše jeden
+[PASS] V-15 – CONFIRMED/CANCELLED nelze znovu potvrdit
+[PASS] V-15A – Pozdní Confirm je odmítnut
+[PASS] V-15B – Selhání Notification Service při Confirm
+[PASS] V-16 – Včasný Cancel DRAFT
+[PASS] V-17 – Cancel CONFIRMED uvolní dostupnost
+[PASS] V-18 – Pozdní Cancel CONFIRMED je odmítnut
+[PASS] V-19 – Opakovaný Cancel je idempotentní
+[PASS] V-20 – Cizí student nemůže rezervaci zrušit
+[PASS] V-20A – Selhání Notification Service při Cancel
+[PASS] V-20B – Souběžný Confirm a Cancel stejného DRAFTu
+[PASS] V-21 – Správce schválí PENDING_APPROVAL
+[PASS] V-22 – REJECT uvolní termín
+[PASS] V-23 – Student nesmí rozhodovat o PENDING_APPROVAL
+[PASS] V-24 – Nelze rozhodnout CANCELLED, EXPIRED ani CONFIRMED
+[PASS] V-25 – PENDING_APPROVAL v start - 60 min expiruje
+[PASS] V-26 – PENDING_APPROVAL dvě hodiny před začátkem neexpiruje
+
+----------------------------------------
+PASS: 30
+FAIL: 0
+CELKEM: 30
+----------------------------------------
+
+
+> swi_2027@1.0.0 verify:regression
+> tsx src/regression.test.ts
+
+[PASS] R-01 HTTP walking skeleton používá policy a odmítnutí nezmění data
+[PASS] R-02 Approve/Reject uloží právě jeden požadavek studentovi do outboxu
+[PASS] R-03 Expire × Cancel: po získání zámku expirací storno nepřepíše EXPIRED
+[PASS] R-04 Cancel × Expire: úspěšně zrušená žádost zůstane CANCELLED
+[PASS] R-05 Expire × Expire: jediný přechod a dvě oznámení bez duplicit
+[PASS] R-06 Chyba zápisu outboxu vrátí celou expiraci zpět
+[PASS] R-07 Souběžná nekolidující potvrzení nepřekročí denní limit
+REGRESSION PASS: 7; FAIL: 0
+[PASS] C09 Confirm: přesná hranice, +1 ms, schvalovací větev a adresáti outboxu
+[PASS] C09 APPROVE: -1 ms, přesná hranice a +1 ms
+[PASS] C09 skutečný zámek hamsters: APPROVE, HTTP 400, původní stav a outbox
+[PASS] C09 REJECT: -1 ms, přesná hranice a +1 ms
+[PASS] C09 skutečný zámek hamsters: REJECT, HTTP 400, původní stav a outbox
+[PASS] C09 Cancel: přesná hranice, +1 ms a idempotentní storno po lhůtě
+[PASS] C09 skutečný zámek reservations: cancel, HTTP 400, původní stav a outbox
+npm notice
+npm notice New major version of npm available! 10.9.2 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice
+check:c09 exit 0
+[PASS] Smoke dist/index.js: GET /api status=ok and GET /api/hamsters returns DB catalog
+
+GitHub Actions C09 verification, run 43858548614
+Commit: 72bcb1727df09053148f2d8c2ec1f6840cda5336
+Status: completed, conclusion: success
+https://github.com/tomaskirnig/SWI_2027/actions/runs/43858548614
+
+npm audit --omit=dev --json
+Exit code: 1
+Runtime counts: 1 moderate, 1 high, 1 critical

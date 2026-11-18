@@ -19,7 +19,7 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // Pomocná funkce pro získání času (podporuje override přes hlavičku x-current-time pro testy)
-function getEffectiveTime(req: Request): Date {
+function getTimeOverride(req: Request): Date | undefined {
   const headerTime = req.headers['x-current-time'];
   if (typeof headerTime === 'string') {
     const parsed = new Date(headerTime);
@@ -27,7 +27,7 @@ function getEffectiveTime(req: Request): Date {
       return parsed;
     }
   }
-  return new Date();
+  return undefined;
 }
 
 // --------------------------------------------------------------------------
@@ -77,7 +77,7 @@ app.post('/api/reservations', async (req: Request, res: Response) => {
 
     const start = new Date(start_time);
     const end = new Date(end_time);
-    const now = getEffectiveTime(req);
+    const now = getTimeOverride(req) ?? new Date();
 
     const reservation = await createReservation(user_id, hamster_id, start, end, now);
     res.status(201).json(reservation);
@@ -129,11 +129,23 @@ app.post('/api/reservations/:id/confirm', async (req: Request, res: Response) =>
       return res.status(400).json({ error: 'Chybí identifikátor studenta (user_id).' });
     }
 
-    const now = getEffectiveTime(req);
-    const result = await confirmReservation(id, user_id, now);
+    const result = await confirmReservation(id, user_id, getTimeOverride(req));
     res.json(result);
   } catch (err: any) {
-    res.status(err.status || 500).json({
+    const status = err.status || 500;
+    if (status >= 500) {
+      const errorCode = typeof err.code === 'string' && /^[A-Z0-9_]{3,20}$/.test(err.code)
+        ? err.code
+        : 'UNKNOWN';
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        component: 'reservation-api',
+        operation: 'confirm',
+        errorCode,
+        httpStatus: status,
+      }));
+    }
+    res.status(status).json({
       error: err.message,
       offerTimeShift: err.offerTimeShift || false,
     });
@@ -151,8 +163,7 @@ app.post('/api/reservations/:id/cancel', async (req: Request, res: Response) => 
       return res.status(400).json({ error: 'Chybí identifikátor studenta (user_id).' });
     }
 
-    const now = getEffectiveTime(req);
-    const result = await cancelReservation(id, user_id, now);
+    const result = await cancelReservation(id, user_id, getTimeOverride(req));
     res.json(result);
   } catch (err: any) {
     res.status(err.status || 500).json({ error: err.message });
@@ -172,8 +183,7 @@ app.post('/api/reservations/:id/decide', async (req: Request, res: Response) => 
       return res.status(400).json({ error: 'Pole decision musí být buď APPROVE nebo REJECT.' });
     }
 
-    const now = getEffectiveTime(req);
-    const result = await decideReservation(id, userRole, decision, now);
+    const result = await decideReservation(id, userRole, decision, getTimeOverride(req));
     res.json(result);
   } catch (err: any) {
     res.status(err.status || 500).json({ error: err.message });
@@ -185,7 +195,7 @@ app.post('/api/reservations/:id/decide', async (req: Request, res: Response) => 
 // --------------------------------------------------------------------------
 app.post('/api/reservations/expire', async (req: Request, res: Response) => {
   try {
-    const now = getEffectiveTime(req);
+    const now = getTimeOverride(req) ?? new Date();
     const result = await expirePendingReservations(now);
     res.json(result);
   } catch (err: any) {

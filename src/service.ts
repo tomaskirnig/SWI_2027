@@ -101,7 +101,7 @@ export async function checkAvailability(hamsterId: string, start: Date, end: Dat
 }
 
 // OP-03: služba zajišťuje data a vlastnictví, policy rozhoduje business pravidla.
-export async function confirmReservation(reservationId: number, userId: string, now: Date = new Date()) {
+export async function confirmReservation(reservationId: number, userId: string, timeOverride?: Date) {
   const confirmed = await repository.withTransaction(async client => {
     const reservation = await repository.findReservationByIdForUpdate(client, reservationId);
     if (!reservation) throw { status: 404, message: `Rezervace ID ${reservationId} neexistuje.` };
@@ -119,7 +119,7 @@ export async function confirmReservation(reservationId: number, userId: string, 
       { id: hamster.id, name: hamster.name, isActive: hamster.is_active, requiresApproval: hamster.requires_approval },
       activeRows.map(row => ({ start: new Date(row.start_time), end: new Date(row.end_time) })),
       dailyMinutes,
-      now,
+      timeOverride ?? new Date(),
     );
     if (!decision.ok) {
       throw { status: decision.code === 'SLOT_CONFLICT' ? 409 : 400, code: decision.code, message: decision.message };
@@ -142,7 +142,7 @@ export async function confirmReservation(reservationId: number, userId: string, 
 }
 
 // OP-04: řádkový zámek chrání přechod i idempotentní opakování.
-export async function cancelReservation(reservationId: number, userId: string, now: Date = new Date()) {
+export async function cancelReservation(reservationId: number, userId: string, timeOverride?: Date) {
   const cancelled = await repository.withTransaction(async client => {
     const reservation = await repository.findReservationByIdForUpdate(client, reservationId);
     if (!reservation) throw { status: 404, message: `Rezervace ID ${reservationId} neexistuje.` };
@@ -151,7 +151,7 @@ export async function cancelReservation(reservationId: number, userId: string, n
     if (!['DRAFT', 'CONFIRMED', 'PENDING_APPROVAL'].includes(reservation.status)) {
       throw { status: 400, message: `Rezervaci ve stavu '${reservation.status}' nelze zrušit.` };
     }
-    if (!isAtLeast15MinBefore(now, new Date(reservation.start_time))) {
+    if (!isAtLeast15MinBefore(timeOverride ?? new Date(), new Date(reservation.start_time))) {
       throw { status: 400, message: 'Rezervaci lze zrušit nejpozději 15 minut před začátkem rezervace.' };
     }
     await repository.updateReservationStatus(client, reservationId, 'CANCELLED');
@@ -167,7 +167,7 @@ export async function cancelReservation(reservationId: number, userId: string, n
 
 // OP-05: prototyp garantuje uložení požadavku na oznámení, nikoli jeho doručení.
 export async function decideReservation(
-  reservationId: number, userRole: string, decision: 'APPROVE' | 'REJECT', now: Date = new Date(),
+  reservationId: number, userRole: string, decision: 'APPROVE' | 'REJECT', timeOverride?: Date,
 ) {
   if (!['spravce', 'manager'].includes((userRole || '').trim().toLowerCase())) {
     throw { status: 403, message: 'Rozhodovat o žádostech může pouze Správce křečka (role: spravce nebo MANAGER).' };
@@ -181,11 +181,11 @@ export async function decideReservation(
     if (reservation.status !== 'PENDING_APPROVAL') {
       throw { status: 400, message: `Rezervace není ve stavu PENDING_APPROVAL (její stav je ${reservation.status}).` };
     }
-    if (now.getTime() >= new Date(reservation.start_time).getTime() - ONE_HOUR_MS) {
-      throw { status: 400, message: 'Lhůta pro rozhodnutí správce již vypršela; žádost má být expirována.' };
-    }
     const hamster = await repository.findHamsterByIdForUpdate(client, reservation.hamster_id);
     if (!hamster) throw { status: 404, message: `Křeček '${reservation.hamster_id}' neexistuje.` };
+    if ((timeOverride ?? new Date()).getTime() >= new Date(reservation.start_time).getTime() - ONE_HOUR_MS) {
+      throw { status: 400, message: 'Lhůta pro rozhodnutí správce již vypršela; žádost má být expirována.' };
+    }
     if (decision === 'APPROVE' && !hamster.is_active) {
       throw { status: 400, message: `Křeček '${hamster.name}' není aktivní a žádost nelze schválit.` };
     }
