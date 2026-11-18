@@ -155,4 +155,4 @@ Při nečinnosti zůstane reprodukované pozdní potvrzení možné. Ruční ome
 | AC-05 · Regrese | Ověřit také platný Confirm pro křečka vyžadujícího schválení a spustit `npm run verify` na izolované DB. | Větev schvalování uloží `PENDING_APPROVAL` a dva outbox záznamy, pro studenta a správce. Projdou také případy souběhu, kolizí, denního limitu, oprávnění, atomického zápisu i expirace. |
 
 
-- Zaznamenat commit změny, review, výsledky build/test/verify, skutečnou DB hranici a nezávislý čistý checkout podle C09. `R-01` zůstává se skutečným reziduálním rizikem `NOT VERIFIED`, dokud opatření neprojde kontrolou.
+- Zaznamenán commit změny, nezávislý review, výsledky build/test/verify a čistý checkout podle C09. Reziduální riziko `R-01` je po ověření ve stavu `VERIFIED - MITIGATED`.
