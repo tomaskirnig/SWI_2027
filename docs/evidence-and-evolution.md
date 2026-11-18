@@ -477,3 +477,24 @@ Integrační hranice je HTTP → aplikační transakce → PostgreSQL. Testy zá
 - **Schéma a konfigurace.** Schéma z [repository](../src/repository.ts) se inicializuje při startu bez nové migrace. Testovací konfigurace je lokální `127.0.0.1`, role `swi_c08`, DB `swi_c08_f1` a `DB_SSL=false` v izolované instanci. Návrat aplikace na původní kód obnoví původní chybu časového rozhodnutí a automaticky nevrátí už uložené rezervace ani oznámení. Případnou obnovu dat je potřeba posoudit zvlášť.
 - **Nezávislý code review a čistý checkout.** `NOT RUN`. Druhý člen týmu má zrevidovat diff commitu After proti AC-01 až AC-05 a zopakovat postup z README z čistého checkoutu na stejném commitu. Do tohoto záznamu doplní jméno, datum, prověřený předpoklad, vypořádání připomínek, prostředí, příkazy, výsledky a případný blocker.
 - **Pracovní stav vydání `HOLD`.** Vlastník změny Martin Kalus. Funkční ověření a lokální smoke prošly. K rozhodnutí týmu o vydání zbývá nezávislé review a reprodukce. Instalace ohlásila 6 upozornění ve stávajících závislostech. Samostatné `npm audit --omit=dev` vrátilo kód `1` a ve stromu runtime závislostí nahlásilo 1 střední, 1 vysoké a 1 kritické upozornění. Před rozhodnutím o nasazení je potřeba vyhodnotit dopad a způsob nápravy. Souhrn je v [lokálním logu](verification-c09.txt). Technický důkaz k riziku R-01 je v tabulce výše.
+
+## C10 Provozní situace a logy
+
+Očekávání byla zapsána před oběma běhy 18. 11. 2026. Výchozí commit `55b1216014288fe6a3727e63940fd5ab2b34c329` vrátil při výpadku z Confirm HTTP `500`, ale tento požadavek neměl vlastní diagnostický záznam. Do [Confirm](../src/app.ts) proto přibyl log technického selhání na serveru. Následující výsledky jsou z opakovaného pokusu na commitu `ce83c5bb99816bdf84f839b498044a16278e0fd8`.
+
+Prostředí bylo Windows, Node.js 22.14.0, sestavení `npm run build`, aplikace `node dist/index.js` a čerstvá izolovaná PostgreSQL 17.11 na localhostu. Použity byly fiktivní účty a desetiminutové intervaly křečka `ferda` tři dny dopředu. Dva překrývající se návrhy byly založeny před prvním potvrzením. Stav a počet záznamů v outboxu se ověřovaly samostatným SQL čtením podle ID rezervace.
+
+| Situace | Očekávaný a skutečný výsledek | Ověření stavu | Co ukazují logy |
+|---|---|---|---|
+| Úspěšné potvrzení | Create má vrátit `201 DRAFT`, Confirm `200 CONFIRMED`. **PASS**, obě odpovědi odpovídaly. | Rezervace 1 v SQL `CONFIRMED` a jeden outbox záznam. | Aplikace k operaci nevytvořila záznam. Odpověď a uložený stav stačí k prokázání úspěchu. |
+| Zamítnutá kolize | Confirm druhého návrhu posunutého o 5 minut má vrátit `409`. **PASS**, API vrátilo `409`. | Rezervace 1 zůstala `CONFIRMED`. Rezervace 2 zůstala `DRAFT` s nulou outbox záznamů. | Aplikace vrátila kolizi klientovi a nezapsala ji do logu. Samostatný chybový log by zvyšoval šum. |
+| Technická porucha a obnova | Confirm rezervace 3 má při zastavené DB vrátit `500` a vytvořit diagnostický záznam. Po obnově má jít potvrzení provést. **PASS**, log vznikl a po obnově prošel nový pokus s `200`. | Databáze byla zastavena pomocí `pg_ctl stop -m fast` a spuštěna nad stejným adresářem. Před opakováním samostatné SQL potvrdilo `DRAFT` a 0 záznamů. Po potvrzení bylo v DB `CONFIRMED` a 1 záznam. | V `07:27:37.545Z` Confirm zaznamenal `ECONNREFUSED` a HTTP `500`. PostgreSQL oznámila připravenost k připojení v `08:27:37.976` CET. |
+| Restart aplikace | Po zastavení má HTTP přestat odpovídat. Po novém startu má původní potvrzení přežít a další Create i Confirm mají projít. **PASS**, nový proces načetl rezervaci 1 a pro rezervaci 4 vrátil `201` a `200`. | Po zastavení selhalo spojení na port aplikace. Po restartu ověřilo `GET /api/reservations/1` původní rezervaci. SQL potvrdilo rezervace 1 a 4 jako `CONFIRMED`, každou s jedním outbox záznamem. | Ukončení procesu zaznamenal testovací nástroj. Nový proces zaznamenal `Databáze připravena.` a `Křečkomat API server běží`. |
+
+Relevantní výřez z logu aplikace při výpadku.
+
+```json
+{"timestamp":"2026-11-18T07:27:37.545Z","component":"reservation-api","operation":"confirm","errorCode":"ECONNREFUSED","httpStatus":500}
+```
+
+Pro diagnostiku mají hodnotu technické chyby a start služby. Z logu výpadku šlo určit čas, operaci, typ chyby a odpověď aplikace. Přetrvání rezervací, nepřítomnost vedlejšího zápisu při výpadku a úspěch další operace doložilo až HTTP ověření se samostatným čtením PostgreSQL.
