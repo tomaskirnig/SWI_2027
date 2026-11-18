@@ -132,7 +132,20 @@ app.post('/api/reservations/:id/confirm', async (req: Request, res: Response) =>
     const result = await confirmReservation(id, user_id, getTimeOverride(req));
     res.json(result);
   } catch (err: any) {
-    res.status(err.status || 500).json({
+    const status = err.status || 500;
+    if (status >= 500) {
+      const errorCode = typeof err.code === 'string' && /^[A-Z0-9_]{3,20}$/.test(err.code)
+        ? err.code
+        : 'UNKNOWN';
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        component: 'reservation-api',
+        operation: 'confirm',
+        errorCode,
+        httpStatus: status,
+      }));
+    }
+    res.status(status).json({
       error: err.message,
       offerTimeShift: err.offerTimeShift || false,
     });
