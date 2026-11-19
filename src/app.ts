@@ -77,9 +77,10 @@ app.post('/api/reservations', async (req: Request, res: Response) => {
 
     const start = new Date(start_time);
     const end = new Date(end_time);
-    const now = getEffectiveTime(req);
 
+    const now = getEffectiveTime(req);
     const reservation = await createReservation(user_id, hamster_id, start, end, now);
+
     res.status(201).json(reservation);
   } catch (err: any) {
     res.status(err.status || 500).json({ error: err.message });
@@ -129,8 +130,7 @@ app.post('/api/reservations/:id/confirm', async (req: Request, res: Response) =>
       return res.status(400).json({ error: 'Chybí identifikátor studenta (user_id).' });
     }
 
-    const now = getEffectiveTime(req);
-    const result = await confirmReservation(id, user_id, now);
+    const result = await confirmReservation(id, user_id, () => getEffectiveTime(req));
     res.json(result);
   } catch (err: any) {
     res.status(err.status || 500).json({
@@ -172,8 +172,8 @@ app.post('/api/reservations/:id/decide', async (req: Request, res: Response) => 
       return res.status(400).json({ error: 'Pole decision musí být buď APPROVE nebo REJECT.' });
     }
 
-    const now = getEffectiveTime(req);
-    const result = await decideReservation(id, userRole, decision, now);
+    const result = await decideReservation(id, userRole, decision, () => getEffectiveTime(req));
+    
     res.json(result);
   } catch (err: any) {
     res.status(err.status || 500).json({ error: err.message });

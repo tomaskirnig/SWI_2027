@@ -39,6 +39,57 @@ async function blockedOrFinished(finished: () => boolean) {
   }
   throw new Error('Souběžná operace nezačala čekat na zámek ani nedoběhla.');
 }
+async function decideAfterHamsterLock(
+  hamsterId: string,
+  timeBeforeLock: Date,
+  timeAfterLock: Date,
+  run: (clock: () => Date) => Promise<{ status: string }>,
+) {
+  const blocker = await pool.connect();
+  let currentTime = timeBeforeLock;
+  let operation: Promise<PromiseSettledResult<{ status: string }>[]> | undefined;
+
+  try {
+    await blocker.query('BEGIN');
+    const lock = await blocker.query(
+      'SELECT id FROM hamsters WHERE id = $1 FOR UPDATE',
+      [hamsterId],
+    );
+    assert.equal(lock.rowCount, 1);
+
+    const { rows } = await blocker.query('SELECT pg_backend_pid() AS pid');
+    const blockerPid = rows[0].pid;
+    operation = Promise.allSettled([run(() => currentTime)]);
+
+    const deadline = Date.now() + 3000;
+    while (Date.now() < deadline) {
+      const { rows } = await blocker.query(
+        `SELECT EXISTS (
+          SELECT 1 FROM pg_stat_activity
+          WHERE datname = current_database()
+            AND $1::int = ANY(pg_blocking_pids(pid))
+        ) AS waiting`,
+        [blockerPid],
+      );
+
+      if (rows[0].waiting) {
+        currentTime = timeAfterLock;
+        return operation.then(([result]) => result);
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+
+    throw new Error('Operace nezačala čekat na zámek křečka.');
+  } finally {
+    try {
+      await blocker.query('ROLLBACK');
+    } finally {
+      blocker.release();
+      await operation;
+    }
+  }
+}
 
 const tests: Array<[string, () => Promise<void>]> = [
   ['R-01 HTTP walking skeleton používá policy a odmítnutí nezmění data', async () => {
@@ -210,6 +261,67 @@ const tests: Array<[string, () => Promise<void>]> = [
     const results = await Promise.allSettled([confirmReservation(a.id, 'student-a', NOW), confirmReservation(b.id, 'student-a', NOW)]);
     assert.equal(results.filter(item => item.status === 'fulfilled').length, 1);
     assert.equal((await pool.query("SELECT COUNT(*)::int AS count FROM reservations WHERE status='CONFIRMED'")).rows[0].count, 1);
+  }],
+    ['R-08 Confirm: přesně na hranici projde, o 1 ms později se odmítne', async () => {
+    for (const offset of [0, 1]) {
+      await reset();
+      const draft = await createReservation(
+        'student-a', 'ferda', d('12:00:00'), d('12:20:00'), NOW,
+      );
+      const before = await notifications(draft.id);
+      const boundary = d('11:45:00').getTime();
+
+      const result = await decideAfterHamsterLock(
+        'ferda',
+        new Date(boundary - 1),
+        new Date(boundary + offset),
+        clock => confirmReservation(draft.id, 'student-a', clock),
+      );
+
+      if (offset === 0) {
+        assert(result.status === 'fulfilled');
+        assert.equal(result.value.status, 'CONFIRMED');
+        assert.equal(await state(draft.id), 'CONFIRMED');
+        assert.equal((await notifications(draft.id)).length, before.length + 1);
+      } else {
+        assert(result.status === 'rejected');
+        assert.equal(result.reason.status, 400);
+        assert.equal(result.reason.code, 'LEAD_TIME_VIOLATION');
+        assert.equal(await state(draft.id), 'DRAFT');
+        assert.deepEqual(await notifications(draft.id), before);
+      }
+    }
+  }],
+  ['R-09 Decide: Approve i Reject projdou před hranicí a na hranici se odmítnou', async () => {
+    for (const decision of ['APPROVE', 'REJECT'] as const) {
+      for (const offset of [-1, 0]) {
+        await reset();
+        const id = await pending();
+        const before = await notifications(id);
+        const boundary = d('11:00:00').getTime();
+
+        const result = await decideAfterHamsterLock(
+          'archimedes',
+          new Date(boundary - 2),
+          new Date(boundary + offset),
+          clock => decideReservation(id, 'manager', decision, clock),
+        );
+
+        if (offset === -1) {
+          const expected = decision === 'APPROVE' ? 'CONFIRMED' : 'REJECTED';
+          assert(result.status === 'fulfilled');
+          assert.equal(result.value.status, expected);
+          assert.equal(await state(id), expected);
+          assert.equal((await notifications(id)).length, before.length + 1);
+        } else {
+          assert(result.status === 'rejected');
+          assert.equal(result.reason.status, 400);
+          assert.match(result.reason.message, /Lhůta pro rozhodnutí správce již vypršela/);
+          assert.equal(await state(id), 'PENDING_APPROVAL');
+          assert.deepEqual(await notifications(id), before);
+        }
+      }
+    }
   }],
 ];
 

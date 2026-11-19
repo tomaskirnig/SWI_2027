@@ -75,7 +75,7 @@ Všechny klíčové příkazy jsou definovány v `package.json`:
 | `npm run build` | **Kompilace** TypeScriptu do složky `dist/` pomocí `tsc`. |
 | `npm start` | **Produkční start** zkompilovaného serveru z `dist/index.js`. |
 | `npm run spike` | **Engineering Spike (C01)** — rychlé ověření spojení s PostgreSQL a zápisu/čtení testovací rezervace. |
-| `npm run verify` | **Automatizované ověření C02** — spustí 30 scénářů baseline a 7 regresních scénářů nad oddělenou PostgreSQL. |
+| `npm run verify` | **Automatizované ověření C02** — spustí 30 scénářů baseline a 9 regresních scénářů nad oddělenou PostgreSQL. |
 | `npm run test:unit` | **Unit testy Detailed Designu (C05)** — 10 izolovaných unit testů v paměti ověřujících kontrakt `IConfirmationPolicy`. |
 | `npm run test:arch` | **Architektonické testy (C03)** — statické ověření oddělení vrstev (4 kontroly: API a doména bez DB, kontrakt repository, služba bez SQL). |
 

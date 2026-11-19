@@ -343,3 +343,91 @@ Následující opravy jsou plánované; v rámci owner review byla doplněna dok
 - F2 byl ověřen s náhradou DOM a API; ověření v prohlížeči se skutečným backendem a regresní ověření budoucích oprav zbývá provést.
 - Dočasné ověřovací kontroly nejsou součástí trvalé testové sady. Build a databázové integrační sady nebyly při owner review opakovány; výše uvedené výsledky z 22. 10. 2026 jsou historickou evidencí.
 - Podklady C03 použité pro posouzení F3: `SWI_C03_PartA_Tuesday_students_bilingual_v8.html` a `SWI_C03_students_bilingual_v10.html`. Závěr N/A vychází z jejich obsahu a pravidla C06 nehodnotit nezadané požadavky.
+
+## C07 – Registr rizik
+
+**Výchozí verze rozboru** `c39d54f`  
+**Vstupy** Nálezy F1 a F2 z C06, konfigurace PostgreSQL v [README](../README.md) a dosavadní záznamy o verifikaci v tomto dokumentu.
+
+L označuje pravděpodobnost a I dopad, obojí na stupnici 1 až 3. Priorita se určuje jako L × I. Skóre i očekávané zbytkové riziko jsou odhady pro týmovou revizi. F1 a F2 zůstávají otevřené nálezy C06. Registr popisuje jejich možné důsledky a další rizika projektu.
+
+| ID a oblast | Příčina → nejistá událost → důsledek | Počáteční L × I a zdůvodnění |
+|---|---|---|
+| R-01 · Technické | Confirm a Approve používají čas získaný před čekáním na DB zámek → při souběhu může během čekání uplynout lhůta → systém povolí přechod v rozporu se specifikací. | 2 × 3 = 6 (HIGH). Chování bylo prokázáno při simulovaném čekání a porušuje přijaté pravidlo. Četnost ve skutečném provozu neznáme. |
+| R-02 · Technické / uživatelské | UI vynechává čekající žádosti a chybně dělí intervaly podle dnů → uživatel může dostat nesprávnou informaci o zbývajícím limitu → může upustit od platné rezervace nebo ji UI nepovolí odeslat. | 2 × 2 = 4 (MEDIUM). Nesprávný výpočet byl prokázán na konkrétních datech. Dopad se týká uživatelského rozhraní. |
+| R-03 · Externí závislost | Integrační testy vyžadují dostupnou izolovanou PostgreSQL → při výpadku nebo chybné konfiguraci se tým k testovací DB nepřipojí → může chybět povinný integrační důkaz pro C09. | 2 × 3 = 6 (HIGH). Závislost je skutečná a bez dostupné testovací DB nelze ověřit práci s transakcemi. |
+| R-04 · Release / reprodukovatelnost | Čistý běh aktuální verze na jiném stroji zatím není doložený → druhý člen může narazit na rozdílné prostředí nebo nezdokumentovaný krok → sestavení a vydání kandidáta se může zpozdit. | 2 × 2 = 4 (MEDIUM). Historické výsledky existují. Případnou chybu nastavení lze opravit a ověření zopakovat. |
+
+| ID | Strategie a opatření | Důkaz účinnosti | Očekávané zbytkové riziko | Skutečné zbytkové riziko | Spouštěč nové kontroly |
+|---|---|---|---|---|---|
+| R-01 | MITIGATE. Odečíst čas po potřebných zámcích v okamžiku rozhodnutí. | Regrese se skutečným PostgreSQL zámkem potvrdí odmítnutí po lhůtě a ověří stav rezervace i outbox. | 1 × 3 = 3 (MEDIUM). Chyba by byla méně pravděpodobná, dopad případného pozdního potvrzení zůstává vysoký. | NOT VERIFIED | Změna časové podmínky nebo pořadí zámků v Confirm či Decide. |
+| R-02 | MITIGATE. Sladit výpočet v UI s BR-04 pro `PENDING_APPROVAL` a pražské kalendářní dny. | Regrese ověří čekající žádost, odlišné datum v UTC a Praze a rezervaci přes půlnoc. | 1 × 2 = 2 (LOW). Regrese pokryjí známé scénáře. | NOT VERIFIED | Změna denního limitu, blokujících stavů nebo práce s časovým pásmem. |
+| R-03 | MITIGATE. Připravit opakovatelný postup inicializace izolované testovací DB. | Druhý člen inicializuje DB podle návodu a spustí `npm run verify`. | 1 × 3 = 3 (MEDIUM). Opakovatelná příprava snižuje pravděpodobnost zablokování testů. | NOT VERIFIED | Selhání připojení nebo inicializace testovací DB. |
+| R-04 | MITIGATE. Zdokumentovat runtime, konfiguraci a příkazy pro instalaci, build a spuštění. | Druhý člen z čistého checkoutu doloží `npm ci`, build a spuštění podle README. | 1 × 2 = 2 (LOW). Nezávislý běh odhalí chybějící kroky ještě před vydáním. | NOT VERIFIED | Změna runtime, závislostí nebo pokynů ke spuštění. |
+
+| ID | Vlastník opatření | Termín | Kdo rozhodne o přijetí zbytkového rizika |
+|---|---|---|---|
+| R-01 | Dennis Carnevale | 19/11/2026 | Tomáš Kirnig |
+| R-02 | Dennis Carnevale | 19/11/2026 | Tomáš Kirnig |
+| R-03 | Dennis Carnevale| 19/11/2026 | Tomáš Kirnig |
+| R-04 | Dennis Carnevale | 19/11/2026 | Tomáš Kirnig |
+
+## C08 – Ověření výchozí verze pro CR-08-01
+
+**Vazba** [CR-08-01](intent-and-change.md#c08--cr-08-01-čas-rozhodnutí-při-potvrzení-a-schválení-rezervace), nález F1, riziko R-01.  
+**Výchozí verze** `c39d54feda198c78c1b330ce3008f2eb6e83ae97`.  
+**Prostředí** Windows, Node.js 24.19.0. Funkce ze `src/service.ts` běžely v Node VM se skutečnou doménovou logikou ze `src/domain.ts`, řízenými hodinami a náhradou databázové vrstvy. Posun času nastal při simulovaném získání zámku křečka.
+
+### TC-C08-01 – Confirm na hranici 15 minut
+
+**Příprava** Vlastní rezervace ve stavu `DRAFT`, aktivní křeček bez nutnosti schválení, žádná kolize ani vyčerpaný denní limit. Začátek rezervace `2027-01-15T12:00:00Z`, lhůta pro Confirm `11:45:00.000Z`. Každý pokus začíná se stejnými daty a prázdným záznamem požadovaných zápisů.
+
+| Krok | Akce | Očekávání před během | Skutečný výsledek |
+|---|---|---|---|
+| 1 | Spustit Confirm v `11:44:59.999Z` a uvolnit simulovaný zámek v `11:45:00.000Z`. | Potvrzení uspěje přesně na hranici. | Funkce vrátila `CONFIRMED` a požádala o zápis stavu a oznámení. **PASS**. |
+| 2 | Spustit Confirm v `11:45:00.000Z` a uvolnit zámek v `11:45:00.001Z`. | Služba odmítne operaci chybou se statusem `400` a nevyžádá změnu stavu ani zápis do outboxu. | Funkce vrátila `CONFIRMED` a požádala o oba zápisy. **FAIL – F1 reprodukován**. |
+
+### TC-C08-02 – Approve na hodinové hranici
+
+**Příprava** Rezervace ve stavu `PENDING_APPROVAL`, aktivní křeček vyžadující schválení a oprávněný správce. Začátek rezervace `2027-01-15T12:00:00Z`, lhůta pro rozhodnutí `11:00:00.000Z`. Každý pokus začíná se stejnými daty a prázdným záznamem požadovaných zápisů.
+
+| Krok | Akce | Očekávání před během | Skutečný výsledek |
+|---|---|---|---|
+| 1 | Spustit Approve v `10:59:59.998Z` a uvolnit simulovaný zámek v `10:59:59.999Z`. | Schválení uspěje 1 ms před hranicí. | Funkce vrátila `CONFIRMED` a požádala o zápis stavu a oznámení. **PASS**. |
+| 2 | Spustit Approve v `10:59:59.999Z` a uvolnit zámek v `11:00:00.000Z`. | Služba odmítne operaci chybou se statusem `400` a nevyžádá změnu stavu ani zápis do outboxu. | Funkce vrátila `CONFIRMED` a požádala o oba zápisy. **FAIL – F1 reprodukován**. |
+
+**Rozsah důkazu** Simulace ověřila výsledek aplikační služby a požadavky na zápis. HTTP odpověď, skutečné čekání na PostgreSQL zámek a uložený stav v databázi v tomto běhu ověřeny nebyly. Varianta Reject se v tomto běhu nespouštěla.
+
+## C09 – Implementace a ověření CR-08-01
+
+**Výchozí verze** `c39d54feda198c78c1b330ce3008f2eb6e83ae97`.
+
+**Změna** Confirm a Decide odečítají čas po získání potřebných databázových zámků. HTTP vrstva jim předává zdroj času. V `src/regression.test.ts` přibyly scénáře R-08 a R-09 se skutečným čekáním na PostgreSQL zámek.
+
+| Ověření | Skutečný výsledek |
+|---|---|
+| `npm exec -- tsc --noEmit` | PASS, bez typových chyb. |
+| `npm test` | 10 unit testů, 30 ověření Specification Baseline testů a 4 architektonické kontroly PASS. |
+| `npm run verify:regression` | 9 PASS, 0 FAIL. R-08 ověřil Confirm přesně na hranici a o 1 ms později. R-09 ověřil Approve i Reject těsně před hranicí a přesně na ní. U odmítnutých operací se uložený stav ani outbox nezměnily. |
+
+**Porovnání s C08** Na výchozí verzi Confirm a Approve při simulovaném čekání nesprávně uspěly po dosažení nepovoleného času. Po opravě hraniční scénáře prošly se skutečným PostgreSQL zámkem.
+
+**Stav vydání** HOLD. Zbývá zaznamenat review změny, celý ověřovací běh, nezávislý čistý checkout a výsledný commit kandidáta.
+
+## C10 – Provozní ověření a logy
+
+**Testovaná verze**`c39d54feda198c78c1b330ce3008f2eb6e83ae97` + necommitnuté změny C09 .
+
+**Prostředí** Windows, izolovaná lokální PostgreSQL 17, HTTP API na portu `3100`.
+
+| Pokus | Očekávání | Skutečný výsledek a ověření stavu |
+|---|---|---|
+| Úspěšné potvrzení | První návrh přejde do `CONFIRMED`. | API potvrdilo rezervaci ID `1`. Samostatný `GET` vrátil ID `1` ve stavu `CONFIRMED`. **PASS**. |
+| Odmítnutí kolize | Druhé potvrzení vrátí HTTP `409` a rezervace zůstane `DRAFT`. | API vrátilo HTTP `409` s vysvětlením kolize. Samostatný `GET` vrátil ID `2` ve stavu `DRAFT`. **PASS**. |
+| Porucha připojení při startu | S neplatným portem databáze aplikace nedokončí inicializaci. | Při použití `127.0.0.1:1` skončil start chybou `ECONNREFUSED`. Server nezačal naslouchat. **PASS**. |
+| Restart a obnova provozu | Po obnovení správného připojení zůstane potvrzená rezervace uložená a aplikace přijme nový požadavek. | Server znovu nastartoval na portu `3100`. Samostatný `GET` vrátil ID `1` jako `CONFIRMED`. Nový požadavek vytvořil ID `3` ve stavu `DRAFT`. **PASS**. |
+
+### Výřez ze serverového terminálu
+
+```text
+Selhání při startu serveru / inicializaci DB: Error: connect ECONNREFUSED 127.0.0.1:1
